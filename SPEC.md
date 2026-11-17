@@ -331,7 +331,7 @@ The **repo map** is generated per run: the tree of tracked files with line count
 
 ### 10.2 Hard checks
 
-**Path jail.** Every path argument is resolved with symlinks followed and must fall inside the role's roots: the worktree (read and write for the worker, read for the others) and the run's `context/` directory (read). Anything else is denied, including a symlink inside the worktree that points outside it.
+**Path jail.** Every path argument is resolved with symlinks followed and must fall inside the role's roots: the worktree (read and write for the worker, read for the others) and the run's `context/` directory (read). Anything else is denied, including a symlink inside the worktree that points outside it. A `..` component is denied outright, even where it would stay inside a root, so a path is always a plain descent from a root.
 
 **Protected paths.** `project.yaml` lists paths whose change deserves extra attention, such as the policy code and the guardrail tests of this project. Writing to them is allowed, since everything inside the worktree is. The effect is on approvals: if a plan's `files_to_touch` intersects protected paths, `plan_gate` is not skipped, and if the diff touches them, the merge approval lists the protected files at the top.
 
