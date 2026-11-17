@@ -1,0 +1,48 @@
+# The default development flow (SPEC.md section 7).
+#
+# Each step maps its outcomes to the next step under `next`. The key is deliberately not
+# `on`: YAML 1.1 parsers read a bare `on` as the boolean true.
+name: development-default
+version: 1
+start: plan
+limits:
+  max_iterations: 3
+  max_cost_usd: 6.00
+  max_wall_minutes: 60
+steps:
+  plan:
+    kind: agent
+    role: planner
+    produces: plan
+    next: {ok: plan_gate, blocked: question}
+  question:
+    kind: approval
+    type: question
+    next: {answered: plan}
+  plan_gate:
+    kind: approval
+    type: plan
+    when: task.plan_approval
+    next: {approve: implement, deny: plan}
+  implement:
+    kind: agent
+    role: worker
+    produces: work_report
+    next: {ok: checks}
+  checks:
+    kind: gate
+    gates: [format, lint, tests, coverage, test_integrity, diff_size, secrets, guardrail_regression]
+    next: {pass: review, fail: implement}
+  review:
+    kind: agent
+    role: reviewer
+    produces: review
+    next: {pass: merge_gate, fail: implement}
+  merge_gate:
+    kind: approval
+    type: merge
+    next: {approve: merge, deny: implement}
+  merge:
+    kind: action
+    action: merge_and_verify
+    next: {ok: done, error: failed}

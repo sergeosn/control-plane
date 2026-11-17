@@ -1,0 +1,45 @@
+# Control Plane home configuration (SPEC.md sections 5 and 14): model profiles, price
+# table and defaults. Agents never write this file; change it by hand and commit.
+version: 1
+
+# Model profiles. A task's `roles` block maps each role to one of these names.
+# `wire_format` is `anthropic` for the Messages API or `openai-compatible` for a gateway
+# that exposes only chat completions.
+profiles:
+  default:
+    wire_format: anthropic
+    model: claude-sonnet-5-5
+    max_tokens: 8192
+  strict:
+    wire_format: anthropic
+    model: claude-opus-5-5
+    max_tokens: 8192
+    temperature: 0.0
+
+# Price table in USD per million tokens, keyed by model id. These numbers are placeholders:
+# check them against the provider's current price list before the first live run.
+prices:
+  claude-sonnet-5-5:
+    input: 3.00
+    output: 15.00
+    cache_write: 3.75
+    cache_read: 0.30
+  claude-opus-5-5:
+    input: 15.00
+    output: 75.00
+    cache_write: 18.75
+    cache_read: 1.50
+
+defaults:
+  lane: development
+  # Per run (SPEC.md section 8.5). The flow's `limits` block overrides these.
+  budget:
+    max_iterations: 3
+    max_cost_usd: 6.00
+    max_wall_minutes: 60
+  # Per step.
+  step_budget:
+    max_turns: 40
+    max_total_tokens: 400000
+    max_cost_usd: 2.00
+    max_wall_seconds: 900

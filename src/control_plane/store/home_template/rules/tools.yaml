@@ -1,0 +1,52 @@
+# Tool-call classification (SPEC.md section 10.3).
+#
+# Evaluation order: hard checks first, then the first matching rule, then `default`.
+# Classes: read and write-local are allowed; write-external and destructive park the run
+# for approval; blocked is always denied. `default: ask` parks any call no rule matches.
+# Every decision is logged with the id of the rule that produced it.
+version: 1
+default: ask
+rules:
+  - id: read-tools
+    tool: [read_file, list_dir, search]
+    class: read
+  - id: local-file-writes
+    tool: [write_file, edit_file, delete_file]
+    class: write-local
+  - id: local-commands
+    tool: run_command
+    argv_prefix:
+      - [pytest]
+      - [ruff]
+      - [uv, run, pytest]
+      - [uv, run, ruff]
+      - [git, status]
+      - [git, diff]
+      - [git, add]
+      - [git, commit]
+    class: write-local
+  - id: network-and-deps
+    tool: run_command
+    argv_prefix:
+      - [git, push]
+      - [gh]
+      - [curl]
+      - [uv, add]
+      - [pip, install]
+    class: write-external
+  - id: history-rewrite
+    tool: run_command
+    argv_prefix:
+      - [git, reset]
+      - [git, clean]
+      - [git, checkout, "--"]
+      - [rm]
+    class: destructive
+  - id: never
+    tool: run_command
+    argv_prefix:
+      - [sudo]
+      - [ssh]
+      - [env]
+      - [printenv]
+    class: blocked
