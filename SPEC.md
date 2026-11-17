@@ -126,7 +126,7 @@ status: backlog
 - [AC3] Both paths are covered by tests.
 ```
 
-`roles` maps each role to a model profile defined in `plane.yaml`. Acceptance criteria carry ids because the worker's report and the review refer to them one by one. `status` is one of `backlog`, `running`, `parked`, `done`, `failed`.
+`roles` maps each role to a model profile defined in `plane.yaml`. Acceptance criteria carry ids because the worker's report and the review refer to them one by one. `status` is one of `backlog`, `running`, `parked`, `done`, `failed`. The body holds exactly the two sections `## Goal` and `## Acceptance criteria`; each criterion is one line of the form `- [ID] text`, and ids are unique within a task. A file with any other key, section or line shape is rejected with an error that names the field.
 
 ## 7. Flow
 
@@ -263,7 +263,7 @@ Requirements that follow from the Messages API and must hold:
 
 ### 8.3 Structured output
 
-A role finishes by calling its submit tool. The tool's `input_schema` is generated from the Pydantic model of the artifact and the tool is declared with `strict: true`, so the model's input matches the schema. The engine still validates with Pydantic, because strict schemas drop constraints such as `minLength` and cannot express cross-field rules. Strict mode has documented limits (all objects need `additionalProperties: false`, and there are caps on the number of strict tools and optional parameters per request), so artifacts stay flat and small.
+A role finishes by calling its submit tool. The tool's `input_schema` is generated from the Pydantic model of the artifact and the tool is declared with `strict: true`, so the model's input matches the schema. The engine still validates with Pydantic, because strict schemas drop constraints such as `minLength` and cannot express cross-field rules. Strict mode has documented limits (all objects need `additionalProperties: false`, and there are caps on the number of strict tools and optional parameters per request), so artifacts stay flat and small. The exported schema lists every property as required: an optional field becomes nullable, so the model sends `null` rather than omitting the key, and `default` keywords are dropped.
 
 ### 8.4 Artifacts
 
