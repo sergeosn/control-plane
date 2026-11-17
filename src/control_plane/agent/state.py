@@ -21,7 +21,11 @@ StepStatus = Literal["running", "parked", "finished"]
 
 
 class CallState(DomainModel):
-    """One `tool_use` of the current model turn. A parked call stays `pending`."""
+    """One `tool_use` of the current model turn.
+
+    A parked call stays `pending` and carries the id of its approval entry, which is what
+    `resume_step` reads to find the human's decision (section 12).
+    """
 
     tool_use_id: str = Field(min_length=1)
     tool: str = Field(min_length=1)
@@ -30,6 +34,7 @@ class CallState(DomainModel):
     status: CallStatus = "pending"
     content: str | None = None
     is_error: bool = False
+    approval_id: str | None = None
 
 
 class TokenCounts(DomainModel):

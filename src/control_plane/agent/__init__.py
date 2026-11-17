@@ -15,8 +15,10 @@ from control_plane.agent.loop import (
     ApiLoopExecutor,
     Executor,
     Outcome,
+    ResumeError,
     StepContext,
     StepResult,
+    approval_id,
     submit_tool,
 )
 from control_plane.agent.repeats import FAIL_AT, NOTICE_AT, RepeatTracker
@@ -43,6 +45,7 @@ __all__ = [
     "Executor",
     "Outcome",
     "RepeatTracker",
+    "ResumeError",
     "StepBudget",
     "StepContext",
     "StepResult",
@@ -50,6 +53,7 @@ __all__ = [
     "StepUsage",
     "TokenCounts",
     "append_transcript",
+    "approval_id",
     "check_budget",
     "load_transcript",
     "submit_tool",

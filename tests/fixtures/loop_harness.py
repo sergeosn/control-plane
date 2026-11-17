@@ -18,7 +18,7 @@ from control_plane.agent import (
     StepState,
     load_transcript,
 )
-from control_plane.domain import LLMCall, ToolCall
+from control_plane.domain import Approval, LLMCall, ToolCall
 from control_plane.llm import (
     Message,
     PriceTable,
@@ -214,6 +214,28 @@ class Harness:
             self.context(attempt=attempt, max_tokens=max_tokens, **budget)
         )
         return result, client
+
+    async def resume_step(
+        self,
+        responses: Sequence[Response],
+        *,
+        tools: ToolExecutor | None = None,
+        tick_seconds: float = 0.0,
+        attempt: int = 1,
+        max_tokens: int = 8192,
+        **budget: float,
+    ) -> tuple[StepResult, ScriptedClient]:
+        """Resume the step a previous `run_step` left parked or crashed, with a new client."""
+        client = TickingClient(responses, self.clock, tick_seconds)
+        executor = self.executor(client, tools=tools)
+        result = await executor.resume_step(
+            self.context(attempt=attempt, max_tokens=max_tokens, **budget)
+        )
+        return result, client
+
+    def approvals(self) -> list[Approval]:
+        """Every line of the run's `approvals.jsonl`, decisions included."""
+        return self.run.approvals()
 
     # --- what the step folder holds ---------------------------------------------
 

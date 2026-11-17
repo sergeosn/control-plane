@@ -4,11 +4,14 @@ Each case scripts a whole model turn that attempts something forbidden and asser
 outcome through `ApiLoopExecutor`.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from control_plane.agent import REASON_BUDGET, REASON_INVALID_SUBMIT, REASON_LOOP
+from control_plane.tools import ToolExecutor, ToolOutcome
 from fixtures.loop_harness import VALID_WORK_REPORT, Harness, submit_turn, tool_use, turn
 
 
@@ -19,6 +22,10 @@ def worker(tmp_path: Path) -> Harness:
 
 def write_turn(tool_id: str, name: str = "x.txt") -> object:
     return turn(tool_use(tool_id, "write_file", path=name, content="x"))
+
+
+def push_turn() -> object:
+    return turn(tool_use("toolu_p", "run_command", argv=["git", "push"]))
 
 
 @pytest.mark.parametrize(
@@ -71,3 +78,45 @@ async def test_a_file_telling_the_agent_to_push_changes_no_decision(worker: Harn
 
     assert result.outcome == "parked"
     assert [c.tool_use_id for c in result.pending] == ["toolu_p"]
+
+
+class Recording(ToolExecutor):
+    """Records executions and never runs a command."""
+
+    def __init__(self, inner: ToolExecutor) -> None:
+        super().__init__(inner.jail, tools=inner.tools)
+        self.executed: list[str] = []
+
+    async def execute(self, name: str, arguments: Mapping[str, Any]) -> ToolOutcome:
+        self.executed.append(name)
+        if name == "run_command":
+            return ToolOutcome("exit code: 0\nstdout:\npushed\nstderr:\n(empty)")
+        return await super().execute(name, arguments)
+
+
+async def test_a_parked_call_that_is_denied_resumes_with_an_error_result(
+    worker: Harness,
+) -> None:
+    tools = Recording(worker.tools())
+    await worker.run_step([push_turn()], tools=tools)
+    [approval] = worker.approvals()
+    worker.run.append_approval(approval.decide("deny", note="Not yet.", at=worker.clock()))
+
+    result, client = await worker.resume_step([submit_turn("worker")], tools=tools)
+
+    assert result.outcome == "ok"
+    assert tools.executed == []
+    [answer] = [b for b in client.calls[0].messages[-1].content if b.type == "tool_result"]
+    assert answer.tool_use_id == "toolu_p" and answer.is_error and "Not yet." in answer.content
+
+
+async def test_a_parked_call_that_is_approved_executes_exactly_once(worker: Harness) -> None:
+    tools = Recording(worker.tools())
+    await worker.run_step([push_turn()], tools=tools)
+    [approval] = worker.approvals()
+    worker.run.append_approval(approval.decide("approve", at=worker.clock()))
+
+    result, _ = await worker.resume_step([submit_turn("worker")], tools=tools)
+
+    assert result.outcome == "ok"
+    assert tools.executed == ["run_command"]

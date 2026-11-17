@@ -223,9 +223,10 @@ stateDiagram-v2
 ```python
 class Executor(Protocol):
     async def run_step(self, step: StepContext) -> StepResult: ...
+    async def resume_step(self, step: StepContext) -> StepResult: ...
 ```
 
-v0 has one implementation, `ApiLoopExecutor`. The flow engine knows nothing about models or tools. It hands a `StepContext` to an executor and receives a validated artifact or a failure. This is the seam where a CLI-agent executor can be added later.
+v0 has one implementation, `ApiLoopExecutor`. The flow engine knows nothing about models or tools. It hands a `StepContext` to an executor and receives a validated artifact, a park or a failure. `resume_step` takes the same context and continues a parked or interrupted step from its folder (section 12). This is the seam where a CLI-agent executor can be added later.
 
 ### 8.2 The loop
 
@@ -278,7 +279,7 @@ A role finishes by calling its submit tool. The tool's `input_schema` is generat
 
 ### 8.5 Budgets and loop detection
 
-Per step: `max_turns`, `max_total_tokens`, `max_cost_usd`, `max_wall_seconds`. Per run: `max_iterations`, `max_cost_usd`, `max_wall_minutes`. Budgets are checked before each model call. At 80% of any step budget the next `tool_result` carries a notice with what is left. A breach fails the step, and the run parks with an approval of type `budget`.
+Per step: `max_turns`, `max_total_tokens`, `max_cost_usd`, `max_wall_seconds`. Per run: `max_iterations`, `max_cost_usd`, `max_wall_minutes`. Budgets are checked before each model call. At 80% of any step budget the next `tool_result` carries a notice with what is left. A breach fails the step, and the run parks with an approval of type `budget`. Wall time counts only while the step runs: the time a run spends parked is not the step's, so the counter resumes where it stopped.
 
 The same tool with the same arguments three times in a row adds a notice. Five times fails the step.
 
@@ -424,9 +425,9 @@ There is one queue. An entry has an id, the run, a type, what is being asked, th
 | `budget` | A step or run budget is exhausted | extend, end the run |
 | `merge` | Review passed | approve, deny with reason |
 
-**Parking.** The run state becomes `parked` and the process exits. Nothing waits in memory.
+**Parking.** The run state becomes `parked` and the process exits. Nothing waits in memory. For a parked tool call the loop appends one `tool_call` entry per call to the run's `approvals.jsonl`, keeps the call as `pending` in `state.json` with the entry's id, and logs a `run_parked` event; an unfinished run is `parked` after its last `run_parked` event until a `run_resumed` event follows. Entry ids are `A-<run id without R->-NN`, numbered per run, so one queue over every run has no collisions. A decision is a second line with the same id, and the latest line of an id is its current state.
 
-**Resuming.** `cplane resume` reloads the step's transcript and `state.json`. An approved tool call is executed and its real result returned. A denied one returns a `tool_result` with `is_error` and the human's reason, so the model continues from the same point and can choose another approach.
+**Resuming.** `cplane resume` reloads the step's transcript and `state.json`. An approved tool call is executed and its real result returned. A denied one returns a `tool_result` with `is_error` and the human's reason, so the model continues from the same point and can choose another approach. Every `tool_result` the resume produces joins the ones already given, in the one user message that answers the interrupted response. The human's decision is logged in `tool_calls.jsonl` as a second record of the call, with the approval id. A resume with an approval still undecided changes nothing and reports the run as still parked.
 
 **Crash recovery.** `state.json` marks a tool call as started before it runs and as finished after. On resume, a call that started and did not finish is not re-run. It returns an error saying the call was interrupted and its effect is unknown, and the model decides what to check.
 

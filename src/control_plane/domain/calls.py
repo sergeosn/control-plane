@@ -32,7 +32,9 @@ class ToolCall(DomainModel):
     """One tool call and the policy decision it got (section 10.3).
 
     `tool_class` and `rule_id` are empty when no rule matched and the default applied.
-    `error` holds the message of a failed or denied call.
+    `error` holds the message of a failed or denied call. A parked call is logged twice:
+    once with the `park` decision, and again on resume with the human's decision and the
+    id of the approval entry that carries it (section 12).
     """
 
     ts: AwareDatetime
@@ -43,3 +45,4 @@ class ToolCall(DomainModel):
     decision: Decision
     rule_id: str | None
     error: str | None = None
+    approval_id: str | None = None

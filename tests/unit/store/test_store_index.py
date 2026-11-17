@@ -387,6 +387,25 @@ async def test_run_rows_come_from_manifest_events_and_result(home: Home, store: 
     }
 
 
+async def test_an_unfinished_run_is_parked_after_its_last_run_parked_event(
+    home: Home, store: RunStore
+) -> None:
+    run = store.create("R-0003")
+    run.log_event("run_started")
+    run.log_event("step_parked", step="implement", attempt=1, outcome="parked")
+    run.log_event("run_parked", step="implement", attempt=1, outcome="parked")
+
+    async with Index(home) as index:
+        [parked] = await index.runs()
+    run.log_event("run_resumed", step="implement", attempt=1)
+    async with Index(home) as index:
+        await index.sync_run("R-0003")
+        [resumed] = await index.runs()
+
+    assert (parked["state"], parked["finished"]) == ("parked", False)
+    assert (resumed["state"], resumed["finished"]) == ("running", False)
+
+
 async def test_step_rows_come_from_step_folders_and_their_events(
     home: Home, store: RunStore
 ) -> None:

@@ -54,6 +54,8 @@ from control_plane.store.runs import (
 SCHEMA_VERSION = 1
 DB_FILE = "state.db"
 TABLE_NAMES = ("tasks", "runs", "steps", "llm_calls", "tool_calls", "approvals")
+RUN_STATE_EVENTS = ("run_parked", "run_resumed")
+"""The events that move an unfinished run between `running` and `parked` (section 12)."""
 
 logger = logging.getLogger(__name__)
 
@@ -350,9 +352,10 @@ def _run_row(
     folder: Path, run_id: str, manifest: Manifest | None, events: list[Event], out: _RunRows
 ) -> Row:
     finished = (folder / RESULT_FILE).exists()
-    state = "running"
     if finished:
         state = _read_state(folder / RESULT_FILE, f"runs/{run_id}/{RESULT_FILE}", out)
+    else:
+        state = _active_state(events)
     with_step = [event for event in events if event.step is not None]
     created = manifest.created_at if manifest else events[0].ts if events else None
     return {
@@ -365,6 +368,12 @@ def _run_row(
         "created_at": created.isoformat() if created else None,
         "last_event_at": events[-1].ts.isoformat() if events else None,
     }
+
+
+def _active_state(events: list[Event]) -> str:
+    """`parked` after a `run_parked` event that no `run_resumed` followed, else `running`."""
+    marks = [event.kind for event in events if event.kind in RUN_STATE_EVENTS]
+    return "parked" if marks and marks[-1] == "run_parked" else "running"
 
 
 def _step_row(run_id: str, step: Path, match: re.Match[str], events: list[Event]) -> Row:
