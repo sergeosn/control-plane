@@ -75,7 +75,8 @@ plane-home/                      git repository, private
   runs/<run-id>/                 immutable once finished
     manifest.json
     context/BRIEF.md  INDEX.md  ...
-    steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json
+    steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json,
+                                 llm_calls.jsonl, tool_calls.jsonl
     gates/<attempt>/             one output file per gate
     events.jsonl
     approvals.jsonl
@@ -90,6 +91,8 @@ plane-home/                      git repository, private
 The home repository is where the system keeps its own state and rules. A run's worktree is the only place an agent can write. Because rules, rubrics and knowledge live in the home repository and not in the worktree, an agent cannot weaken them. It can only propose a change, which goes through an approval.
 
 Writes go to files first and to the index second. JSON files are written to a temporary name and renamed. JSONL files are append-only. A failed index update is logged and does not fail the run, because `cplane reindex` can rebuild the index from the files.
+
+`llm_calls.jsonl` and `tool_calls.jsonl` are the audit log of a step (section 10.1): one record per model response with its usage and cost, one per tool call with its policy decision and the rule that made it. They are what the index and the metrics of section 16 read.
 
 A run folder is committed to the home repository when the run finishes. After that it must not change. `cplane reindex` reports any finished run folder that differs from the committed version.
 
@@ -445,7 +448,7 @@ The engine always runs from the control checkout. It modifies a run worktree, ne
 
 ## 14. Index and CLI
 
-The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tables: `tasks`, `runs`, `steps`, `llm_calls`, `tool_calls`, `approvals`. There are no migrations. The schema carries a version number, and on mismatch the file is deleted and rebuilt from the home repository.
+The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tables: `tasks`, `runs`, `steps`, `llm_calls`, `tool_calls`, `approvals`. There are no migrations. The schema carries a version number in SQLite's `user_version` pragma, and on mismatch the file is deleted and rebuilt from the home repository. A file that is missing or is not a database is rebuilt the same way. Every row is derived from one task file or one run folder, and a writer refreshes the index per task table or per run after writing the files, so that a rebuild gives exactly the rows the incremental writes gave.
 
 | Command | Does |
 |---|---|
@@ -458,7 +461,7 @@ The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tabl
 | `cplane approve <id> [--note]`, `cplane deny <id> --reason` | Decides an entry |
 | `cplane status [<run-id>]` | Shows state, current step, iteration, cost |
 | `cplane inspect <run-id> [--step] [--context] [--transcript]` | Shows what happened and why |
-| `cplane reindex` | Rebuilds the index and verifies finished run folders |
+| `cplane reindex` | Rebuilds the index and verifies finished run folders; exits non-zero when a finished run folder differs from its commit or a file could not be indexed |
 | `cplane selfcheck`, `cplane self-update` | See section 13 |
 
 Every command calls the application layer in `control_plane.app`. No command writes files or the index directly.

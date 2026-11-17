@@ -6,6 +6,7 @@ repository through `--home` or `CPLANE_HOME` (`resolve_home`).
 """
 
 import argparse
+import asyncio
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -13,8 +14,10 @@ from pathlib import Path
 
 from control_plane import __version__
 from control_plane.app import home as app_home
+from control_plane.app import index as app_index
 from control_plane.store.git import GitError
 from control_plane.store.home import ENV_VAR, Home, HomeExistsError, HomeNotFoundError
+from control_plane.store.index import DB_FILE
 
 CommandError = (HomeExistsError, HomeNotFoundError, GitError)
 
@@ -29,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="create a home repository with the development lane and default rules"
     )
     init.add_argument("path", help="where to create the home repository")
+
+    commands.add_parser("reindex", help="rebuild the index and verify finished run folders")
     return parser
 
 
@@ -43,7 +48,26 @@ def _init(args: argparse.Namespace) -> int:
     return 0
 
 
-COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {"init": _init}
+def _reindex(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    report = asyncio.run(app_index.reindex(home))
+    print(f"Rebuilt index at {home.index / DB_FILE}")
+    print(", ".join(f"{table}: {count}" for table, count in report.counts.items()))
+    for problem in report.problems:
+        print(f"cplane: not indexed: {problem}", file=sys.stderr)
+    if report.discrepancies:
+        for found in report.discrepancies:
+            detail = f"{found.kind} {found.path}".strip()
+            print(
+                f"cplane: finished run {found.run_id} differs from its commit: {detail}",
+                file=sys.stderr,
+            )
+    else:
+        print("Finished run folders match their commits.")
+    return 0 if report.ok else 1
+
+
+COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {"init": _init, "reindex": _reindex}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

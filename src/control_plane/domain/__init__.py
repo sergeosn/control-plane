@@ -2,6 +2,7 @@
 
 from control_plane.domain.approval import DECISIONS, Approval, ApprovalType
 from control_plane.domain.base import DomainModel
+from control_plane.domain.calls import Decision, LLMCall, ToolCall
 from control_plane.domain.event import Event
 from control_plane.domain.manifest import FileHash, Manifest, RoleModel, RunBudget
 from control_plane.domain.plan import Plan, PlannedTest, PlanStep
@@ -35,10 +36,12 @@ __all__ = [
     "Criterion",
     "CriterionReview",
     "CriterionStatus",
+    "Decision",
     "DomainModel",
     "Event",
     "FileHash",
     "Finding",
+    "LLMCall",
     "Manifest",
     "Plan",
     "PlanStep",
@@ -53,6 +56,7 @@ __all__ = [
     "Task",
     "TaskFileError",
     "TaskStatus",
+    "ToolCall",
     "Verdict",
     "WorkReport",
     "export_schemas",

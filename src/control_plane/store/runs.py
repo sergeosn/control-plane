@@ -19,9 +19,15 @@ from control_plane.store.git import Git
 from control_plane.store.home import Home
 
 RESULT_FILE = "result.json"
+MANIFEST_FILE = "manifest.json"
 EVENTS_FILE = "events.jsonl"
 APPROVALS_FILE = "approvals.jsonl"
-RUN_SUBDIRS = ("context", "steps", "gates")
+STEPS_DIR = "steps"
+RUN_SUBDIRS = ("context", STEPS_DIR, "gates")
+ARTIFACT_FILE = "artifact.json"
+LLM_CALLS_FILE = "llm_calls.jsonl"
+TOOL_CALLS_FILE = "tool_calls.jsonl"
+"""Per-step files: the artifact and the audit logs of section 10.1 (`domain.calls`)."""
 
 Clock = Callable[[], datetime]
 
