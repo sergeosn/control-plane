@@ -286,6 +286,8 @@ The same tool with the same arguments three times in a row adds a notice. Five t
 
 After every model response and every tool result the loop appends to `transcript.jsonl` and rewrites `state.json`, which holds pending tool calls and budget counters. A step can therefore resume after a park or a crash by reloading the transcript.
 
+A transcript record is one message part: a response is one record, and each `tool_result` is its own record, so the file is current after every tool result. On reload, consecutive records of the same role merge into one message. The one response that is not in the transcript is the `max_tokens` response the loop retries (section 8.2), because the retry resends the same messages; it is still in `llm_calls.jsonl` and counts against the budgets.
+
 ## 9. Context
 
 The prompt carries a short brief. Everything else is a file the agent reads when it needs it.

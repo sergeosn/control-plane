@@ -1,1 +1,57 @@
-"""The tool loop, budgets, loop detection."""
+"""The tool loop, budgets, loop detection (SPEC.md sections 8.2 to 8.6)."""
+
+from control_plane.agent.budget import BudgetCheck, BudgetCounters, StepBudget, check_budget
+from control_plane.agent.loop import (
+    ARTIFACTS,
+    MAX_REPAIRS,
+    REASON_BUDGET,
+    REASON_INVALID_SUBMIT,
+    REASON_LOOP,
+    REASON_MAX_TOKENS,
+    REASON_NO_SUBMIT,
+    STATE_FILE,
+    TRANSCRIPT_FILE,
+    USAGE_FILE,
+    ApiLoopExecutor,
+    Executor,
+    Outcome,
+    StepContext,
+    StepResult,
+    submit_tool,
+)
+from control_plane.agent.repeats import FAIL_AT, NOTICE_AT, RepeatTracker
+from control_plane.agent.state import CallState, StepState, StepUsage, TokenCounts
+from control_plane.agent.transcript import append_transcript, load_transcript, transcript_line
+
+__all__ = [
+    "ARTIFACTS",
+    "FAIL_AT",
+    "MAX_REPAIRS",
+    "NOTICE_AT",
+    "REASON_BUDGET",
+    "REASON_INVALID_SUBMIT",
+    "REASON_LOOP",
+    "REASON_MAX_TOKENS",
+    "REASON_NO_SUBMIT",
+    "STATE_FILE",
+    "TRANSCRIPT_FILE",
+    "USAGE_FILE",
+    "ApiLoopExecutor",
+    "BudgetCheck",
+    "BudgetCounters",
+    "CallState",
+    "Executor",
+    "Outcome",
+    "RepeatTracker",
+    "StepBudget",
+    "StepContext",
+    "StepResult",
+    "StepState",
+    "StepUsage",
+    "TokenCounts",
+    "append_transcript",
+    "check_budget",
+    "load_transcript",
+    "submit_tool",
+    "transcript_line",
+]
