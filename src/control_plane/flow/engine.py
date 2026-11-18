@@ -145,6 +145,11 @@ class FlowReport:
     step: str
     message: str
     approval_id: str | None = None
+    reason: str | None = None
+    """Why a step parked without an approval (`rate_limit`, `connection`, `server_error`,
+    `auth`); else None."""
+    resume_after: datetime | None = None
+    """The earliest time a resume tries the model again; None for `auth`."""
 
 
 # --- the engine ------------------------------------------------------------------------
@@ -341,6 +346,14 @@ class FlowEngine:
                 active.phase, state.status = "parked", "parked"
                 self._save(run, state)
             waiting = next((c.approval_id for c in result.pending if c.approval_id), None)
+            if result.reason is not None:
+                return FlowReport(
+                    "parked",
+                    active.step,
+                    result.message,
+                    reason=result.reason,
+                    resume_after=result.resume_after,
+                )
             return FlowReport("parked", active.step, result.message, approval_id=waiting)
         if result.outcome == "failed":
             if result.reason == REASON_BUDGET:

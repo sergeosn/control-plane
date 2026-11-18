@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from control_plane import __version__
+from control_plane.agent import REASON_AUTH, REASON_CONNECTION, REASON_SERVER_ERROR
 from control_plane.app import approvals as app_approvals
 from control_plane.app import home as app_home
 from control_plane.app import index as app_index
@@ -22,6 +23,7 @@ from control_plane.app import inspect as app_inspect
 from control_plane.app import projects as app_projects
 from control_plane.app import runs as app_runs
 from control_plane.app import selfcheck as app_selfcheck
+from control_plane.app import selfupdate as app_selfupdate
 from control_plane.app import status as app_status
 from control_plane.app import tasks as app_tasks
 from control_plane.app.approvals import ApprovalError
@@ -29,11 +31,13 @@ from control_plane.app.clients import ClientFactory, RunError, environment_clien
 from control_plane.app.inspect import InspectError
 from control_plane.app.projects import ProjectError
 from control_plane.app.runs import RunOutcome
+from control_plane.app.selfupdate import SelfUpdateError
 from control_plane.app.status import StatusError
 from control_plane.app.tasks import TaskError
 from control_plane.domain import Approval
 from control_plane.flow import FlowError
 from control_plane.llm import CredentialsError
+from control_plane.llm.openai_compat import AUTH_TOKEN_VAR
 from control_plane.llm.types import Message
 from control_plane.store.git import GitError
 from control_plane.store.home import ENV_VAR, Home, HomeExistsError, HomeNotFoundError
@@ -55,6 +59,7 @@ CommandError = (
     CredentialsError,
     FlowError,
     WorkspaceError,
+    SelfUpdateError,
 )
 USAGE_ERROR = 2
 
@@ -142,6 +147,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser(
         "selfcheck", help="run a complete scripted flow on a fixture repository, offline"
+    )
+
+    self_update = commands.add_parser(
+        "self-update", help="adopt a new version into the control checkout after a selfcheck"
+    )
+    self_update.add_argument(
+        "--project",
+        default=app_selfupdate.DEFAULT_PROJECT,
+        help=f"the project whose checkouts to use (default: {app_selfupdate.DEFAULT_PROJECT})",
+    )
+    self_update.add_argument(
+        "--to", help="the commit to adopt (default: main); a rollback is --to <old commit>"
     )
     return parser
 
@@ -313,7 +330,26 @@ def _usage(message: str) -> int:
     return USAGE_ERROR
 
 
+_MODEL_PARKS = {
+    REASON_CONNECTION: "the model endpoint could not be reached; check it and run {resume} "
+    "after {when}.",
+    REASON_SERVER_ERROR: "the model endpoint answered with server errors; run {resume} after "
+    "{when}.",
+    REASON_AUTH: f"the endpoint rejected the token; update {AUTH_TOKEN_VAR} and run {{resume}}.",
+}
+"""One line for a run parked on the model endpoint, by reason (docs/SPEC.md section 8.2)."""
+
+
 def _report(outcome: RunOutcome) -> None:
+    line = _MODEL_PARKS.get(outcome.reason or "") if outcome.status == "parked" else None
+    if line is not None:
+        when = outcome.resume_after.isoformat() if outcome.resume_after else "a moment"
+        resume = f"`cplane resume {outcome.run_id}`"
+        print(
+            f"Run {outcome.run_id} of {outcome.task_id}: parked at {outcome.step}: "
+            + line.format(resume=resume, when=when)
+        )
+        return
     print(
         f"Run {outcome.run_id} of {outcome.task_id}: {outcome.status} at {outcome.step}: "
         f"{outcome.message}"
@@ -382,6 +418,27 @@ def _selfcheck(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _self_update(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    result = asyncio.run(app_selfupdate.self_update(home, args.project, to=args.to))
+    if result.failed == "selfcheck":
+        print(result.output, end="")
+        print(f"cplane: selfcheck failed in {result.primary}; nothing changed", file=sys.stderr)
+        return 1
+    if result.failed == "sync":
+        print(result.output, end="")
+        print(
+            f"cplane: uv sync failed in {result.control}; {app_selfupdate.TAG} and the control "
+            f"checkout are back at {result.previous or 'their previous commit'}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"selfcheck passed in {result.primary}")
+    print(f"{app_selfupdate.TAG}: {result.previous or '(none)'} -> {result.current}")
+    print(f"control checkout {result.control} is at {result.current}")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "init": _init,
     "project": _project,
@@ -390,6 +447,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "resume": _resume,
     "status": _status,
     "selfcheck": _selfcheck,
+    "self-update": _self_update,
     "reindex": _reindex,
     "approvals": _approvals,
     "approve": _approve,

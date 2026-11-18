@@ -19,21 +19,38 @@ Messages API) and that format:
 
 Credentials are passed explicitly: `CPLANE_LLM_BASE_URL` and `CPLANE_LLM_AUTH_TOKEN` through
 `from_environment`. The SDK's own `OPENAI_*` variables are never consulted. The SDK retries
-rate-limit and server errors; a 429 that outlives the retries becomes `RateLimitedError`
-with the time to resume at (section 8.2), which the loop turns into a park.
+rate-limit, connection and server errors. Every error that is left becomes a
+`ModelCallError` (section 8.2), which the loop turns into a park or a failed step:
+
+- 429: `RateLimitedError`, resumable after `Retry-After`;
+- a connection error or a timeout: `EndpointUnreachableError`, after `DEFAULT_CONNECTION_WAIT`;
+- 5xx: `ServerFailedError`, after `DEFAULT_SERVER_ERROR_WAIT`;
+- 401, 403: `AuthRejectedError`; 404: `ModelNotFoundError`;
+- 400, 422: `InvalidRequestError` with the endpoint's message, marked when it says the
+  context is too long;
+- any other status, any other SDK error, or a response that cannot be read: `ModelCallError`.
 """
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, Self
 
 import httpx2
-from openai import AsyncOpenAI, RateLimitError
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI, OpenAIError, RateLimitError
 from openai.types.chat import ChatCompletion
 
-from control_plane.llm.client import RateLimitedError
+from control_plane.llm.client import (
+    AuthRejectedError,
+    EndpointUnreachableError,
+    InvalidRequestError,
+    ModelCallError,
+    ModelNotFoundError,
+    RateLimitedError,
+    ServerFailedError,
+)
 from control_plane.llm.types import (
     Message,
     Response,
@@ -52,6 +69,15 @@ AUTH_TOKEN_VAR = "CPLANE_LLM_AUTH_TOKEN"
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RATE_LIMIT_WAIT = timedelta(seconds=60)
 """How long to park when a 429 carries no usable `Retry-After`."""
+DEFAULT_CONNECTION_WAIT = timedelta(seconds=60)
+"""How long to park when the endpoint cannot be reached (connection error or timeout)."""
+DEFAULT_SERVER_ERROR_WAIT = timedelta(seconds=60)
+"""How long to park when the endpoint answers 5xx after the retries."""
+_CONTEXT_TOO_LONG = re.compile(
+    r"context[ _]length|context window|maximum context|prompt is too long|input is too long"
+    r"|too many tokens",
+    re.IGNORECASE,
+)
 
 STOP_REASONS: dict[str, StopReason] = {
     "tool_calls": "tool_use",
@@ -226,6 +252,49 @@ def resume_after(error: RateLimitError, now: datetime) -> datetime:
     return now + DEFAULT_RATE_LIMIT_WAIT
 
 
+# --- other status codes ---------------------------------------------------------
+
+
+def endpoint_message(error: APIStatusError) -> str:
+    """The endpoint's own error message, else the SDK's summary of the response."""
+    body = error.body
+    if isinstance(body, dict) and isinstance(body.get("message"), str):
+        return body["message"]
+    return error.message
+
+
+def status_error(
+    error: APIStatusError, *, model: str, base_url: str, retries: int, now: datetime
+) -> ModelCallError:
+    """The `ModelCallError` for a status code other than 429 (docs/SPEC.md section 8.2)."""
+    status, detail = error.status_code, endpoint_message(error)
+    if status >= 500:
+        until = now + DEFAULT_SERVER_ERROR_WAIT
+        return ServerFailedError(
+            until,
+            f"the endpoint {base_url} answered {status} for {model} after {retries} retries "
+            f"({detail}); try again after {until.isoformat()}",
+        )
+    if status in (401, 403):
+        return AuthRejectedError(
+            f"the endpoint {base_url} rejected the token with {status} ({detail}); update "
+            f"{AUTH_TOKEN_VAR}"
+        )
+    if status == 404:
+        return ModelNotFoundError(
+            f"the endpoint {base_url} has no model {model!r} (404: {detail}); check the model "
+            "id in plane.yaml"
+        )
+    if status in (400, 422):
+        code = error.body.get("code") if isinstance(error.body, dict) else None
+        too_long = code == "context_length_exceeded" or bool(_CONTEXT_TOO_LONG.search(detail))
+        return InvalidRequestError(
+            f"the endpoint rejected the request for {model} with {status}: {detail}",
+            context_window_exceeded=too_long,
+        )
+    return ModelCallError(f"the endpoint {base_url} answered {status} for {model}: {detail}")
+
+
 # --- the client -----------------------------------------------------------------
 
 
@@ -251,6 +320,7 @@ class OpenAICompatibleClient:
         self.strict = strict
         self.max_retries = max_retries
         self._clock = clock
+        self.base_url = base_url
         self._sdk = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -300,4 +370,30 @@ class OpenAICompatibleClient:
                 f"the endpoint answered 429 for {self.model} after {self.max_retries} "
                 f"retries; try again after {until.isoformat()} ({wait}s)",
             ) from error
-        return parse_response(completion)
+        except APIConnectionError as error:  # APITimeoutError is a subclass
+            until = self._clock() + DEFAULT_CONNECTION_WAIT
+            raise EndpointUnreachableError(
+                until,
+                f"the endpoint {self.base_url} could not be reached for {self.model} after "
+                f"{self.max_retries} retries ({type(error).__name__}: {error}); try again "
+                f"after {until.isoformat()}",
+            ) from error
+        except APIStatusError as error:
+            raise status_error(
+                error,
+                model=self.model,
+                base_url=self.base_url,
+                retries=self.max_retries,
+                now=self._clock(),
+            ) from error
+        except OpenAIError as error:
+            raise ModelCallError(
+                f"the call to {self.model} at {self.base_url} failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        try:
+            return parse_response(completion)
+        except ValueError as error:
+            raise ModelCallError(
+                f"the response of {self.base_url} for {self.model} cannot be used: {error}"
+            ) from error

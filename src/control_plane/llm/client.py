@@ -25,16 +25,54 @@ class LLMClient(Protocol):
     ) -> Response: ...
 
 
-class RateLimitedError(Exception):
-    """A rate limit outlived the client's retries (docs/SPEC.md section 8.2).
+class ModelCallError(Exception):
+    """A model call failed (docs/SPEC.md section 8.2). Any `LLMClient` may raise it or one of
+    its subclasses, and the loop parks or fails the step; it never reaches the user as a
+    traceback. Raised as itself, it is an error no subclass covers: the step fails with
+    reason `model_error`."""
 
-    Any `LLMClient` may raise it. The loop parks the run with reason `rate_limit` and
-    `resume_after`, the earliest time a resume should try the call again.
-    """
+
+class RetryLaterError(ModelCallError):
+    """A model error that passes with time: the run parks until `resume_after`."""
 
     def __init__(self, resume_after: datetime, message: str) -> None:
         super().__init__(message)
         self.resume_after = resume_after
+        """The earliest time a resume should try the call again."""
+
+
+class RateLimitedError(RetryLaterError):
+    """A rate limit outlived the client's retries. The run parks with reason `rate_limit`
+    until `resume_after`."""
+
+
+class EndpointUnreachableError(RetryLaterError):
+    """A connection error or a timeout outlived the client's retries. The run parks with
+    reason `connection` until `resume_after`."""
+
+
+class ServerFailedError(RetryLaterError):
+    """The endpoint answered with a server error (5xx) after the client's retries. The run
+    parks with reason `server_error` until `resume_after`."""
+
+
+class AuthRejectedError(ModelCallError):
+    """The endpoint rejected the token (401 or 403). The run parks with reason `auth` and no
+    time: a resume after the token is replaced tries again."""
+
+
+class ModelNotFoundError(ModelCallError):
+    """The endpoint does not know the model id (404). The step fails: `model_not_found`."""
+
+
+class InvalidRequestError(ModelCallError):
+    """The endpoint rejected the request (400 or 422). The step fails with reason
+    `bad_request`, or `model_context_window_exceeded` when the message says the context is
+    too long."""
+
+    def __init__(self, message: str, *, context_window_exceeded: bool = False) -> None:
+        super().__init__(message)
+        self.context_window_exceeded = context_window_exceeded
 
 
 class ScriptExhaustedError(Exception):

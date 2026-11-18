@@ -98,11 +98,17 @@ class ProjectConfig(DomainModel):
     protected_paths: list[str] = Field(default_factory=list)
     gates: GateSettings = Field(default_factory=GateSettings)
 
-    def guardrail_control(self) -> Path | None:
-        """The control checkout the guardrail suite is taken from; None without that gate."""
+    def control_checkout(self) -> Path:
+        """The control checkout (section 13): the guardrail gate's `control` when it names
+        one, else the repository's path with `-control` appended. `cplane self-update` moves
+        it; the guardrail gate takes its suite from it."""
         gate = self.gates.guardrail_regression
-        if gate is None:
-            return None
-        if gate.control is not None:
+        if gate is not None and gate.control is not None:
             return gate.control
         return self.repo.with_name(self.repo.name + CONTROL_SUFFIX)
+
+    def guardrail_control(self) -> Path | None:
+        """The control checkout the guardrail suite is taken from; None without that gate."""
+        if self.gates.guardrail_regression is None:
+            return None
+        return self.control_checkout()

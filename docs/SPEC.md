@@ -279,6 +279,18 @@ Requirements that follow from the Messages API and must hold:
 - A failed tool returns `is_error: true` with a message that says what went wrong and what to try. A bare "failed" wastes a turn.
 - Usage is read from `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`. Cost is computed from the price table in `plane.yaml`, which is maintained by hand from the pricing page. The four classes are disjoint: an OpenAI-compatible client takes the cached and cache-written tokens out of `prompt_tokens` before reporting `input_tokens`, so a cached token is priced once, at the cache-read rate.
 - Rate-limit and overload errors are retried by the SDK. If they persist, the client raises `RateLimitedError` with a `resume_after` time (from `Retry-After`, else 60 seconds), and the run parks with reason `rate_limit`. No approval entry is raised: `state.json` carries `resume_after`, the `run_parked` event names it, and a resume before that time changes nothing and reports the run as still parked.
+- Every other model error is a `ModelCallError` too, and none reaches the user as a traceback. The client maps what is left after the SDK's own retries; the loop parks or fails the step:
+
+  | Error | Client raises | Step |
+  |---|---|---|
+  | Connection error or timeout (`openai.APIConnectionError`, `APITimeoutError`) | `EndpointUnreachableError`, `resume_after` 60 s later | parks, reason `connection` |
+  | 5xx (500, 502, 503, 504, 529, any other 5xx) | `ServerFailedError`, `resume_after` 60 s later | parks, reason `server_error` |
+  | 401, 403 | `AuthRejectedError` | parks, reason `auth`, no `resume_after` |
+  | 404 | `ModelNotFoundError`, naming the model id and `plane.yaml` | fails, reason `model_not_found` |
+  | 400, 422 | `InvalidRequestError` with the endpoint's message | fails, reason `bad_request`, or `model_context_window_exceeded` when the message (or the error code `context_length_exceeded`) says the context is too long |
+  | Any other status, any other SDK error, a response that cannot be read | `ModelCallError` | fails, reason `model_error` |
+
+  A park on `connection`, `server_error` or `auth` raises no approval entry and works like a `rate_limit` park. An `auth` park has no time, so `cplane resume` tries again at once, with a client built from the environment as it is then. `cplane run` and `cplane resume` print one line for such a park: what happened and `cplane resume <run-id>`, with the time for `connection` and `server_error`, and for `auth` that `CPLANE_LLM_AUTH_TOKEN` needs updating. A failed step fails the run with the reason and the message, as any failed step does.
 
 ### 8.3 Structured output
 
@@ -496,6 +508,8 @@ The worker does not have to commit. When the `merge` step runs, the engine first
 
 `cplane self-update` adopts a new version. It runs `cplane selfcheck` from `main`, which executes a complete scripted flow against a fixture repository with no network. The scenario lives in `control_plane.app.selfcheck` and is the one the end-to-end test drives through the command line: in a temporary directory it builds a fixture project with its control checkout, a home, the project and a task; scripted models plan, implement with a bug that fails the `tests` gate, implement again, pass the gates and the review; the run parks at the merge approval, which the selfcheck approves before resuming the run to `done`. Its gates run the standard library's `unittest` with the running interpreter, so a plain installation can run it. Socket connections and name lookups are blocked in-process for the whole scenario, and an attempt fails the selfcheck. It prints one line per check and exits non-zero when any fails. If that passes, it moves the tag `last-known-good` and the control checkout to the new commit. If it fails, the control checkout stays where it is. Rolling back is moving the tag to the previous commit.
 
+`cplane self-update [--project NAME] [--to REF]` does this as follows. `NAME` defaults to `control-plane`. The primary checkout is the repository in `projects/NAME/project.yaml`; the control checkout is the guardrail gate's `control` when it names one, else that path with `-control` appended, the rule the guardrail gate uses (`ProjectConfig.control_checkout`). The target is `main` of the primary checkout, or `REF`. The command refuses, changing nothing, when the project or `REF` is unknown, when the primary checkout is not on `main` or has local changes to tracked files, or when the control checkout is missing or has local changes to tracked files. It runs `uv run --frozen cplane selfcheck` in the primary checkout through the gates' command runner (section 11). If that fails, it prints the output and changes nothing. If it passes, it remembers the commit `last-known-good` points to (none when the tag does not exist yet), moves the tag to the target in the primary repository, checks the control checkout out at the tag, detached, runs `uv sync --frozen` there, and prints the old and the new commit. A control checkout that is a separate clone, not a worktree of the primary repository, gets the tag fetched from the primary checkout first. If `uv sync` fails, the tag and the control checkout are put back where they were, `uv sync` runs again, and the command exits non-zero. A rollback is `cplane self-update --to <old commit>`. With `--to`, the selfcheck still runs in the primary checkout, so it checks `main`, not `REF`.
+
 **Cutover.** Tasks 1 to 16 are done by hand with a coding agent, because the system cannot run yet. From Task 17 on, each task is a file in the home repository and goes through `cplane run`.
 
 ## 14. Index and CLI
@@ -516,7 +530,6 @@ The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tabl
 | `cplane reindex` | Rebuilds the index and verifies finished run folders; exits non-zero when a finished run folder differs from its commit or a file could not be indexed |
 | `cplane selfcheck`, `cplane self-update` | See section 13 |
 
-`cplane self-update` belongs to Task 16 and is not implemented yet.
 
 Details the commands fix:
 

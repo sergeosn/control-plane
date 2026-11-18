@@ -110,6 +110,11 @@ class RunOutcome:
     step: str
     message: str
     approval_id: str | None = None
+    reason: str | None = None
+    """Why the run parked without an approval (`rate_limit`, `connection`, `server_error`,
+    `auth`); else None."""
+    resume_after: datetime | None = None
+    """The earliest time `cplane resume` tries the model again; None for `auth`."""
 
 
 @dataclass(frozen=True)
@@ -428,6 +433,8 @@ async def _settle(home: Home, entry: TaskEntry, run_id: str, report: FlowReport)
         step=report.step,
         message=report.message,
         approval_id=report.approval_id,
+        reason=report.reason,
+        resume_after=report.resume_after,
     )
 
 

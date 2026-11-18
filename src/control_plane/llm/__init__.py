@@ -1,11 +1,18 @@
 """LLMClient protocol, OpenAI-compatible client, scripted client, pricing."""
 
 from control_plane.llm.client import (
+    AuthRejectedError,
+    EndpointUnreachableError,
+    InvalidRequestError,
     LLMClient,
+    ModelCallError,
+    ModelNotFoundError,
     RateLimitedError,
     RecordedCall,
+    RetryLaterError,
     ScriptedClient,
     ScriptExhaustedError,
+    ServerFailedError,
 )
 from control_plane.llm.openai_compat import CredentialsError, OpenAICompatibleClient
 from control_plane.llm.pricing import ModelPrice, PriceTable, PriceTableError, UnknownModelError
@@ -24,6 +31,13 @@ from control_plane.llm.types import (
 )
 
 __all__ = [
+    "AuthRejectedError",
+    "EndpointUnreachableError",
+    "InvalidRequestError",
+    "ModelCallError",
+    "ModelNotFoundError",
+    "RetryLaterError",
+    "ServerFailedError",
     "LLMClient",
     "Message",
     "MessageBlock",

@@ -12,20 +12,27 @@ from typing import Any
 
 import httpx2
 import pytest
-from openai import InternalServerError
 from openai.types.chat import ChatCompletion
 
 from control_plane.llm import (
+    AuthRejectedError,
+    EndpointUnreachableError,
+    InvalidRequestError,
     LLMClient,
     Message,
+    ModelCallError,
+    ModelNotFoundError,
     RateLimitedError,
+    ServerFailedError,
     TextBlock,
     ToolDefinition,
     ToolResultBlock,
     ToolUseBlock,
 )
 from control_plane.llm.openai_compat import (
+    DEFAULT_CONNECTION_WAIT,
     DEFAULT_RATE_LIMIT_WAIT,
+    DEFAULT_SERVER_ERROR_WAIT,
     CredentialsError,
     OpenAICompatibleClient,
     parse_response,
@@ -464,11 +471,158 @@ async def test_resume_after_defaults_when_the_header_is_missing_or_unreadable() 
         assert info.value.resume_after == NOW + DEFAULT_RATE_LIMIT_WAIT
 
 
-async def test_other_api_errors_propagate_unchanged() -> None:
-    endpoint = FakeEndpoint(httpx2.Response(500, json={"error": {"message": "boom"}}))
+# --- other status codes ---------------------------------------------------------
 
-    with pytest.raises(InternalServerError):
-        await client(endpoint).complete("s", [Message.user("go")], [])
+
+def failing(status: int, message: str = "boom", code: str | None = None) -> httpx2.Response:
+    error: dict[str, Any] = {"message": message}
+    if code is not None:
+        error["code"] = code
+    return httpx2.Response(status, json={"error": error})
+
+
+async def call(endpoint: FakeEndpoint, *, max_retries: int = 0) -> None:
+    await client(endpoint, max_retries=max_retries).complete("s", [Message.user("go")], [])
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 504, 529])
+async def test_a_server_error_raises_server_failed_with_a_resume_time(status: int) -> None:
+    endpoint = FakeEndpoint(failing(status, "upstream is down"))
+
+    with pytest.raises(ServerFailedError) as info:
+        await call(endpoint)
+
+    assert info.value.resume_after == NOW + DEFAULT_SERVER_ERROR_WAIT
+    assert str(status) in str(info.value) and "upstream is down" in str(info.value)
+
+
+async def test_a_server_error_is_raised_only_after_the_sdk_retries() -> None:
+    retry_now = {"retry-after": "0"}
+    endpoint = FakeEndpoint(
+        httpx2.Response(503, json={"error": {"message": "x"}}, headers=retry_now),
+        httpx2.Response(503, json={"error": {"message": "x"}}, headers=retry_now),
+    )
+
+    with pytest.raises(ServerFailedError):
+        await call(endpoint, max_retries=1)
+
+    assert len(endpoint.requests) == 2
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_a_rejected_token_raises_auth_rejected_naming_the_variable(status: int) -> None:
+    endpoint = FakeEndpoint(failing(status, "invalid api key"))
+
+    with pytest.raises(AuthRejectedError) as info:
+        await call(endpoint)
+
+    assert "CPLANE_LLM_AUTH_TOKEN" in str(info.value) and str(status) in str(info.value)
+    assert TOKEN not in str(info.value)
+
+
+async def test_a_404_raises_model_not_found_naming_the_model_and_plane_yaml() -> None:
+    endpoint = FakeEndpoint(failing(404, "no such model"))
+
+    with pytest.raises(ModelNotFoundError) as info:
+        await call(endpoint)
+
+    assert MODEL in str(info.value) and "plane.yaml" in str(info.value)
+
+
+@pytest.mark.parametrize("status", [400, 422])
+async def test_a_rejected_request_raises_invalid_request_with_the_endpoint_message(
+    status: int,
+) -> None:
+    endpoint = FakeEndpoint(failing(status, "tools[0].function.parameters is invalid"))
+
+    with pytest.raises(InvalidRequestError) as info:
+        await call(endpoint)
+
+    assert "tools[0].function.parameters is invalid" in str(info.value)
+    assert not info.value.context_window_exceeded
+
+
+@pytest.mark.parametrize(
+    ("message", "code"),
+    [
+        ("This model's maximum context length is 128000 tokens.", None),
+        ("prompt is too long: 210000 tokens > 200000 maximum", None),
+        ("Input too large", "context_length_exceeded"),
+    ],
+)
+async def test_a_context_that_is_too_long_is_marked_as_such(message: str, code: str | None) -> None:
+    endpoint = FakeEndpoint(failing(400, message, code))
+
+    with pytest.raises(InvalidRequestError) as info:
+        await call(endpoint)
+
+    assert info.value.context_window_exceeded
+
+
+@pytest.mark.parametrize("status", [409, 413, 418])
+async def test_any_other_status_raises_a_model_call_error(status: int) -> None:
+    endpoint = FakeEndpoint(failing(status, "odd"))
+
+    with pytest.raises(ModelCallError) as info:
+        await call(endpoint)
+
+    assert type(info.value) is ModelCallError
+    assert str(status) in str(info.value)
+
+
+async def test_a_response_that_cannot_be_read_raises_a_model_call_error() -> None:
+    body = fixture()
+    body["choices"] = []
+    endpoint = FakeEndpoint(ok(body))
+
+    with pytest.raises(ModelCallError, match="choices"):
+        await call(endpoint)
+
+
+def test_every_model_error_is_a_model_call_error() -> None:
+    for error in (
+        RateLimitedError,
+        EndpointUnreachableError,
+        ServerFailedError,
+        AuthRejectedError,
+        ModelNotFoundError,
+        InvalidRequestError,
+    ):
+        assert issubclass(error, ModelCallError)
+
+
+# --- an endpoint that cannot be reached -----------------------------------------
+
+
+class Unreachable(FakeEndpoint):
+    """Raises `error` for every request, the way a refused connection or a timeout does."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        self.requests.append(request)
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx2.ConnectError("connection refused"), httpx2.ReadTimeout("timed out")],
+    ids=["connection", "timeout"],
+)
+async def test_an_unreachable_endpoint_raises_endpoint_unreachable_with_a_resume_time(
+    error: Exception,
+) -> None:
+    endpoint = Unreachable(error)
+
+    with pytest.raises(EndpointUnreachableError) as info:
+        await client(endpoint, max_retries=1).complete("s", [Message.user("go")], [])
+
+    assert info.value.resume_after == NOW + DEFAULT_CONNECTION_WAIT
+    assert BASE_URL in str(info.value)
+    assert TOKEN not in str(info.value)
+    assert len(endpoint.requests) == 2
 
 
 # --- credentials ----------------------------------------------------------------

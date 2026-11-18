@@ -12,10 +12,15 @@ Parking: a call the policy parks gets an entry in the run's `approvals.jsonl`, t
 `state.json` keeps the call as `pending` with the entry's id, and `run_step` returns so the
 process can exit. Nothing waits in memory. A rate limit that outlives the client's retries
 (`RateLimitedError`) parks the same way, without an approval entry: `state.json` carries
-`resume_after`, and a resume before that time changes nothing. `resume_step` reloads the
-transcript and the state, answers every unfinished call (the human's decision for a parked
-one, the real result for one that was never reached, an "interrupted" error for one that
-started and did not finish) and carries on with the same loop.
+`resume_after`, and a resume before that time changes nothing. An endpoint that cannot be
+reached (`EndpointUnreachableError`) parks exactly like it, with reason `connection`, and so
+does a server error (`ServerFailedError`, reason `server_error`). A rejected token parks with
+reason `auth` and no time, so a resume after the token is replaced tries again at once. Any
+other `ModelCallError` fails the step with its reason; none reaches the user as a traceback.
+`resume_step` reloads the transcript and the state, answers every unfinished call (the
+human's decision for a parked one, the real result for one that was never reached, an
+"interrupted" error for one that started and did not finish) and carries on with the same
+loop.
 
 One deliberate gap in the transcript: a response cut short by `max_tokens` inside a
 `tool_use` block is retried once with a higher limit, and the cut response is recorded in
@@ -41,7 +46,17 @@ from control_plane.domain.plan import Plan
 from control_plane.domain.review import Review
 from control_plane.domain.schema import strict_schema
 from control_plane.domain.work_report import WorkReport
-from control_plane.llm.client import LLMClient, RateLimitedError
+from control_plane.llm.client import (
+    AuthRejectedError,
+    EndpointUnreachableError,
+    InvalidRequestError,
+    LLMClient,
+    ModelCallError,
+    ModelNotFoundError,
+    RateLimitedError,
+    RetryLaterError,
+    ServerFailedError,
+)
 from control_plane.llm.pricing import PriceTable
 from control_plane.llm.types import (
     Message,
@@ -77,6 +92,22 @@ REASON_MAX_TOKENS = "max_tokens"
 
 REASON_RATE_LIMIT = "rate_limit"
 """Why a step parked without an approval: the model endpoint kept rate-limiting (8.2)."""
+REASON_CONNECTION = "connection"
+"""Why a step parked without an approval: the model endpoint could not be reached."""
+REASON_SERVER_ERROR = "server_error"
+"""Why a step parked without an approval: the endpoint kept answering 5xx."""
+REASON_AUTH = "auth"
+"""Why a step parked without an approval: the endpoint rejected the token (401, 403)."""
+REASON_MODEL_NOT_FOUND = "model_not_found"
+REASON_BAD_REQUEST = "bad_request"
+REASON_CONTEXT_WINDOW = "model_context_window_exceeded"
+REASON_MODEL_ERROR = "model_error"
+"""A model error no other reason covers."""
+_PARK_UNTIL: dict[type[RetryLaterError], str] = {
+    RateLimitedError: REASON_RATE_LIMIT,
+    EndpointUnreachableError: REASON_CONNECTION,
+    ServerFailedError: REASON_SERVER_ERROR,
+}
 
 MAX_REPAIRS = 2
 """Invalid submit payloads returned for repair before the step fails (section 8.2)."""
@@ -257,8 +288,8 @@ class _StepRun:
             return StepResult(
                 outcome="parked",
                 artifact=None,
-                reason=REASON_RATE_LIMIT,
-                message=f"rate limited until {self.state.resume_after.isoformat()}",
+                reason=self.state.reason or REASON_RATE_LIMIT,
+                message=self.parked_message(),
                 counters=self.state.counters.model_copy(),
                 resume_after=self.state.resume_after,
             )
@@ -289,11 +320,8 @@ class _StepRun:
                 response = await self.executor.client.complete(
                     ctx.system, self.messages, self.tools, max_tokens=max_tokens
                 )
-            except RateLimitedError as limited:
-                self.state.resume_after = limited.resume_after
-                return self.finish(
-                    "parked", REASON_RATE_LIMIT, f"{REASON_RATE_LIMIT}: {limited}", status="parked"
-                )
+            except ModelCallError as error:
+                return self.model_error(error)
             self.record_response(response)
             max_tokens = None
             if response.stop_reason == "max_tokens":
@@ -665,8 +693,36 @@ class _StepRun:
             resume_after=self.state.resume_after,
         )
 
+    def model_error(self, error: ModelCallError) -> StepResult:
+        """Park or fail the step for a model call that failed (section 8.2)."""
+        detail = str(error)
+        if isinstance(error, RetryLaterError):
+            reason = next(
+                (r for kind, r in _PARK_UNTIL.items() if isinstance(error, kind)),
+                REASON_MODEL_ERROR,
+            )
+            self.state.resume_after = error.resume_after
+            return self.finish("parked", reason, f"{reason}: {detail}", status="parked")
+        if isinstance(error, AuthRejectedError):
+            return self.finish("parked", REASON_AUTH, f"{REASON_AUTH}: {detail}", status="parked")
+        if isinstance(error, ModelNotFoundError):
+            return self.finish("failed", REASON_MODEL_NOT_FOUND, detail)
+        if isinstance(error, InvalidRequestError):
+            too_long = error.context_window_exceeded
+            return self.finish(
+                "failed", REASON_CONTEXT_WINDOW if too_long else REASON_BAD_REQUEST, detail
+            )
+        return self.finish("failed", REASON_MODEL_ERROR, detail)
+
     def parked_message(self) -> str:
+        if self.state.reason == REASON_AUTH:
+            return "the model endpoint rejected the token; replace it and resume"
         if self.state.resume_after is not None:
-            return f"rate limited; resume after {self.state.resume_after.isoformat()}"
+            until = self.state.resume_after.isoformat()
+            if self.state.reason == REASON_CONNECTION:
+                return f"the model endpoint could not be reached; resume after {until}"
+            if self.state.reason == REASON_SERVER_ERROR:
+                return f"the model endpoint answered with a server error; resume after {until}"
+            return f"rate limited; resume after {until}"
         waiting = ", ".join(c.approval_id or c.tool_use_id for c in self.state.pending)
         return f"waiting for approval {waiting}"
