@@ -1,0 +1,46 @@
+{
+    "id": "resp_y6pmco7wuavfmdcrvjjj2lbe7o3ztclw2dc4pc7js57zznvtjh4q",
+    "created": 1794973658,
+    "model": "bedrock_mantle/openai/gpt-5.6-luna",
+    "object": "chat.completion",
+    "choices": [
+        {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "function": {
+                            "arguments": "{\"path\":\"README.md\"}",
+                            "name": "read_file"
+                        },
+                        "id": "call_138c2400c3895609a601dd62608a0807",
+                        "type": "function"
+                    }
+                ],
+                "content": null
+            }
+        }
+    ],
+    "usage": {
+        "completion_tokens": 19,
+        "prompt_tokens": 45,
+        "total_tokens": 64,
+        "completion_tokens_details": {
+            "reasoning_tokens": 0
+        },
+        "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "cache_creation_tokens": 0
+        }
+    },
+    "billing": {
+        "payer": "developer"
+    },
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0,
+    "service_tier": "default"
+}

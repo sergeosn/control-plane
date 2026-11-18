@@ -7,6 +7,7 @@ which the loop does once after a `max_tokens` stop (section 8.2).
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from control_plane.llm.types import Message, Response, ToolDefinition
@@ -22,6 +23,18 @@ class LLMClient(Protocol):
         *,
         max_tokens: int | None = None,
     ) -> Response: ...
+
+
+class RateLimitedError(Exception):
+    """A rate limit outlived the client's retries (SPEC.md section 8.2).
+
+    Any `LLMClient` may raise it. The loop parks the run with reason `rate_limit` and
+    `resume_after`, the earliest time a resume should try the call again.
+    """
+
+    def __init__(self, resume_after: datetime, message: str) -> None:
+        super().__init__(message)
+        self.resume_after = resume_after
 
 
 class ScriptExhaustedError(Exception):

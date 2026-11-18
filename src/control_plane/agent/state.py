@@ -51,6 +51,8 @@ class StepState(DomainModel):
     status: StepStatus = "running"
     outcome: str | None = None
     reason: str | None = None
+    resume_after: AwareDatetime | None = None
+    """Set while the step is parked on a rate limit: the earliest time to try again."""
     started_at: AwareDatetime
     counters: BudgetCounters = Field(default_factory=BudgetCounters)
     tokens: TokenCounts = Field(default_factory=TokenCounts)

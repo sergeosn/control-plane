@@ -5,6 +5,7 @@ description = "Control Plane v0: takes a task from a backlog to a merged branch.
 requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.20",
+    "openai>=3.54.0",
     "pydantic>=2.9",
     "pyyaml>=6.0",
     "sqlalchemy[asyncio]>=2.0",
@@ -40,6 +41,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "N"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = ["live: calls the real model endpoint; runs only with CPLANE_LIVE=1"]
 
 [tool.coverage.run]
 source = ["control_plane"]

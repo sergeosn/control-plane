@@ -9,10 +9,12 @@ model response and every tool result the transcript is appended and `state.json`
 
 Parking: a call the policy parks gets an entry in the run's `approvals.jsonl`, the step's
 `state.json` keeps the call as `pending` with the entry's id, and `run_step` returns so the
-process can exit. Nothing waits in memory. `resume_step` reloads the transcript and the
-state, answers every unfinished call (the human's decision for a parked one, the real result
-for one that was never reached, an "interrupted" error for one that started and did not
-finish) and carries on with the same loop.
+process can exit. Nothing waits in memory. A rate limit that outlives the client's retries
+(`RateLimitedError`) parks the same way, without an approval entry: `state.json` carries
+`resume_after`, and a resume before that time changes nothing. `resume_step` reloads the
+transcript and the state, answers every unfinished call (the human's decision for a parked
+one, the real result for one that was never reached, an "interrupted" error for one that
+started and did not finish) and carries on with the same loop.
 
 One deliberate gap in the transcript: a response cut short by `max_tokens` inside a
 `tool_use` block is retried once with a higher limit, and the cut response is recorded in
@@ -38,7 +40,7 @@ from control_plane.domain.plan import Plan
 from control_plane.domain.review import Review
 from control_plane.domain.schema import strict_schema
 from control_plane.domain.work_report import WorkReport
-from control_plane.llm.client import LLMClient
+from control_plane.llm.client import LLMClient, RateLimitedError
 from control_plane.llm.pricing import PriceTable
 from control_plane.llm.types import (
     Message,
@@ -71,6 +73,9 @@ REASON_NO_SUBMIT = "no_submit"
 REASON_INVALID_SUBMIT = "invalid_submit"
 REASON_MAX_TOKENS = "max_tokens"
 """Why a step failed. `refusal` and `model_context_window_exceeded` are recorded as is."""
+
+REASON_RATE_LIMIT = "rate_limit"
+"""Why a step parked without an approval: the model endpoint kept rate-limiting (8.2)."""
 
 MAX_REPAIRS = 2
 """Invalid submit payloads returned for repair before the step fails (section 8.2)."""
@@ -146,6 +151,7 @@ class StepResult:
     message: str
     counters: BudgetCounters
     pending: list[CallState] = field(default_factory=list)
+    resume_after: datetime | None = None
 
 
 @runtime_checkable
@@ -246,6 +252,16 @@ class _StepRun:
                 counters=self.state.counters.model_copy(),
                 pending=list(self.state.pending),
             )
+        if self.state.resume_after is not None and self.executor.clock() < self.state.resume_after:
+            return StepResult(
+                outcome="parked",
+                artifact=None,
+                reason=REASON_RATE_LIMIT,
+                message=f"rate limited until {self.state.resume_after.isoformat()}",
+                counters=self.state.counters.model_copy(),
+                resume_after=self.state.resume_after,
+            )
+        self.state.resume_after = None
         was_parked = self.state.status == "parked"
         # Time spent parked is not the step's; the wall clock restarts where it stopped.
         self.state.started_at = self.executor.clock() - timedelta(
@@ -268,9 +284,15 @@ class _StepRun:
             check = self.check_budget()
             if check is not None:
                 return self.finish("failed", REASON_BUDGET, check)
-            response = await self.executor.client.complete(
-                ctx.system, self.messages, self.tools, max_tokens=max_tokens
-            )
+            try:
+                response = await self.executor.client.complete(
+                    ctx.system, self.messages, self.tools, max_tokens=max_tokens
+                )
+            except RateLimitedError as limited:
+                self.state.resume_after = limited.resume_after
+                return self.finish(
+                    "parked", REASON_RATE_LIMIT, f"{REASON_RATE_LIMIT}: {limited}", status="parked"
+                )
             self.record_response(response)
             max_tokens = None
             if response.stop_reason == "max_tokens":
@@ -631,8 +653,7 @@ class _StepRun:
         self.save()
         self.event(f"step_{status}", outcome=outcome, message=message)
         if status == "parked":
-            waiting = ", ".join(c.approval_id or c.tool_use_id for c in self.state.pending)
-            self.event("run_parked", outcome=outcome, message=f"waiting for approval {waiting}")
+            self.event("run_parked", outcome=outcome, message=self.parked_message())
         return StepResult(
             outcome=outcome,
             artifact=artifact,
@@ -640,4 +661,11 @@ class _StepRun:
             message=message,
             counters=self.state.counters.model_copy(),
             pending=list(self.state.pending),
+            resume_after=self.state.resume_after,
         )
+
+    def parked_message(self) -> str:
+        if self.state.resume_after is not None:
+            return f"rate limited; resume after {self.state.resume_after.isoformat()}"
+        waiting = ", ".join(c.approval_id or c.tool_use_id for c in self.state.pending)
+        return f"waiting for approval {waiting}"

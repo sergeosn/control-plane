@@ -4,17 +4,21 @@ version: 1
 
 # Model profiles. A task's `roles` block maps each role to one of these names.
 # `wire_format` is `anthropic` for the Messages API or `openai-compatible` for a gateway
-# that exposes only chat completions.
+# that exposes only chat completions (SPEC.md section 14). `strict` asks the endpoint for
+# strict tool schemas; it is on by default and can be turned off for a gateway that
+# rejects the `strict` key.
 profiles:
   default:
-    wire_format: anthropic
+    wire_format: openai-compatible
     model: claude-sonnet-5-5
     max_tokens: 8192
+    strict: true
   strict:
-    wire_format: anthropic
+    wire_format: openai-compatible
     model: claude-opus-5-5
     max_tokens: 8192
     temperature: 0.0
+    strict: true
 
 # Price table in USD per million tokens, keyed by model id. These numbers are placeholders:
 # check them against the provider's current price list before the first live run.

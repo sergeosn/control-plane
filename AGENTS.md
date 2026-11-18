@@ -14,7 +14,7 @@ refer to `SPEC.md`.
 | `app/`       | Application services, the only code that writes                           |
 | `domain/`    | Pydantic models: task, plan, work report, review, manifest, events, approvals |
 | `store/`     | Run folders, home repository, index                                       |
-| `llm/`       | `LLMClient` protocol, Anthropic client, scripted client, pricing          |
+| `llm/`       | `LLMClient` protocol, OpenAI-compatible client, scripted client, pricing  |
 | `agent/`     | The tool loop, budgets, loop detection                                    |
 | `tools/`     | Tool definitions and the executor                                         |
 | `policy/`    | Classification, path jail, protected paths, parking                       |

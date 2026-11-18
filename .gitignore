@@ -8,3 +8,5 @@ coverage.xml
 htmlcov/
 dist/
 .DS_Store
+.idea
+*.env

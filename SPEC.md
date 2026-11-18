@@ -262,8 +262,8 @@ Requirements that follow from the Messages API and must hold:
 - Each `tool_use` block in a response gets exactly one `tool_result` with the same `tool_use_id`, all in the next user message, placed before any text. The loop handles several `tool_use` blocks in one response even if parallel tool use is turned off in the request.
 - Engine notices, such as a budget warning, are appended to the content of a `tool_result`. They are not sent as a separate text block after tool results, which can end the turn early.
 - A failed tool returns `is_error: true` with a message that says what went wrong and what to try. A bare "failed" wastes a turn.
-- Usage is read from `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`. Cost is computed from the price table in `plane.yaml`, which is maintained by hand from the pricing page.
-- Rate-limit and overload errors are retried by the SDK. If they persist, the run parks with reason `rate_limit` and a `resume_after` time.
+- Usage is read from `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`. Cost is computed from the price table in `plane.yaml`, which is maintained by hand from the pricing page. The four classes are disjoint: an OpenAI-compatible client takes the cached and cache-written tokens out of `prompt_tokens` before reporting `input_tokens`, so a cached token is priced once, at the cache-read rate.
+- Rate-limit and overload errors are retried by the SDK. If they persist, the client raises `RateLimitedError` with a `resume_after` time (from `Retry-After`, else 60 seconds), and the run parks with reason `rate_limit`. No approval entry is raised: `state.json` carries `resume_after`, the `run_parked` event names it, and a resume before that time changes nothing and reports the run as still parked.
 
 ### 8.3 Structured output
 
@@ -473,7 +473,9 @@ Every command finds the home repository through the `--home` option or the `CPLA
 
 Credentials come from the environment and are passed to the client explicitly. `CPLANE_ANTHROPIC_API_KEY` holds an API key, sent as `x-api-key`. For an LLM gateway, `CPLANE_LLM_BASE_URL` replaces the host and `CPLANE_LLM_AUTH_TOKEN` holds a bearer token, sent as `Authorization: Bearer`. The engine never reads `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_BASE_URL`. Claude Code reads those variables and would route or bill its own sessions through them.
 
-A model profile in `plane.yaml` names its wire format: `anthropic` for the Messages API, or `openai-compatible` for a gateway that exposes only chat completions. Both are implementations of `LLMClient`, so nothing above the client changes. Strict schemas are requested where the endpoint supports them. Pydantic validation and the repair loop do not depend on that support.
+A model profile in `plane.yaml` names its wire format: `anthropic` for the Messages API, or `openai-compatible` for a gateway that exposes only chat completions. Both are implementations of `LLMClient`, so nothing above the client changes. v0 ships the `openai-compatible` client (the gateway is a LiteLLM proxy); the `anthropic` one is not written yet. Strict schemas are requested where the endpoint supports them: a profile's `strict` setting (on by default) turns the `strict` key on every tool that asks for it, and off for a gateway that rejects it. Pydantic validation and the repair loop do not depend on that support.
+
+The OpenAI-compatible client is built on the `openai` package (`AsyncOpenAI`) with `base_url` and `api_key` passed explicitly, so requests go to `<CPLANE_LLM_BASE_URL>/chat/completions` with the token as `Authorization: Bearer`; `OPENAI_API_KEY` and `OPENAI_BASE_URL` are never read. It translates tools to `{"type": "function", "function": {...}}`, `tool_use` blocks to `tool_calls` with JSON-string arguments, each `tool_result` block to one `tool` message (an error result is prefixed with `Error: `, since the format has no `is_error` flag), and `finish_reason` to `stop_reason`: `tool_calls` to `tool_use`, `stop` to `end_turn`, `length` to `max_tokens`, `content_filter` to `refusal`. Usage comes from `prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens` and `prompt_tokens_details.cache_creation_tokens` (or OpenAI's `cache_write_tokens`).
 
 ## 15. Known limits and risks
 
@@ -489,7 +491,7 @@ A model profile in `plane.yaml` names its wire format: `anthropic` for the Messa
 
 ## 16. Testing and metrics
 
-Tests never call a model or the network. `ScriptedClient` implements the `LLMClient` protocol and replays a list of prepared responses, which makes the loop, the policy and the flow engine fully testable. Coverage threshold: 85%.
+Tests never call a model or the network. `ScriptedClient` implements the `LLMClient` protocol and replays a list of prepared responses, which makes the loop, the policy and the flow engine fully testable. The real client is tested against a mock HTTP transport. The one exception is the live smoke test, marked `live`: it runs only with `CPLANE_LIVE=1`, takes its model from `CPLANE_LIVE_MODEL`, is skipped in CI, and is the only test the network block in `tests/conftest.py` stands down for. Coverage threshold: 85%.
 
 The **guardrail regression suite** is its own directory and its own gate. Each case scripts a model that attempts something forbidden and asserts the outcome:
 
@@ -514,7 +516,7 @@ src/control_plane/
   app/          application services, the only code that writes
   domain/       Pydantic models: task, plan, work report, review, manifest, events, approvals
   store/        run folders, home repository, index
-  llm/          LLMClient protocol, Anthropic client, scripted client, pricing
+  llm/          LLMClient protocol, OpenAI-compatible client, scripted client, pricing
   agent/        the tool loop, budgets, loop detection
   tools/        tool definitions and the executor
   policy/       classification, path jail, protected paths, parking
