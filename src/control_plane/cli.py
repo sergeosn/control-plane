@@ -21,6 +21,7 @@ from control_plane.app import home as app_home
 from control_plane.app import index as app_index
 from control_plane.app import inspect as app_inspect
 from control_plane.app import projects as app_projects
+from control_plane.app import report as app_report
 from control_plane.app import runs as app_runs
 from control_plane.app import selfcheck as app_selfcheck
 from control_plane.app import selfupdate as app_selfupdate
@@ -121,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("run_id", nargs="?")
     status.add_argument(
         "--json", action="store_true", help="print one machine-readable JSON object per run"
+    )
+
+    report = commands.add_parser("report", help="summarize metrics from all run folders")
+    report.add_argument(
+        "--json", action="store_true", help="print one machine-readable JSON object"
     )
 
     commands.add_parser("reindex", help="rebuild the index and verify finished run folders")
@@ -452,6 +458,31 @@ def _status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _report_metrics(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    report = app_report.run_report(home)
+    if args.json:
+        print(json.dumps(report, separators=(",", ":")))
+        return 0
+    print(
+        "Runs merged with no human input other than approvals: "
+        f"{report['runs']['merged_without_human_input']}"
+    )
+    print(f"Median iterations: {report['iterations']['median']}")
+    print(f"Median cost: ${report['cost_usd']['median']}")
+    print(f"Total cost: ${report['cost_usd']['total']}")
+    wall = report["wall_minutes"]["median"]
+    print(f"Median wall time: {wall:.1f} minutes" if wall is not None else "Median wall time: None")
+    print("Gate failures:")
+    for name, count in report["gate_failures"].items():
+        print(f"  {name}: {count}")
+    print("Tool calls:")
+    for class_name, decisions in report["tool_calls"].items():
+        for decision, count in decisions.items():
+            print(f"  {class_name} / {decision}: {count}")
+    return 0
+
+
 def _selfcheck(args: argparse.Namespace) -> int:
     report = asyncio.run(app_selfcheck.run_selfcheck())
     for check in report.checks:
@@ -488,6 +519,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "run": _run,
     "resume": _resume,
     "status": _status,
+    "report": _report_metrics,
     "selfcheck": _selfcheck,
     "self-update": _self_update,
     "reindex": _reindex,
