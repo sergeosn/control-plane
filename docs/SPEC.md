@@ -77,7 +77,7 @@ plane-home/                      git repository, private
     context/NN-<step>-<attempt>/ BRIEF.md, INDEX.md and the step's context files
     steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json,
                                  llm_calls.jsonl, tool_calls.jsonl
-    gates/<attempt>/             one output file per gate
+    gates/<attempt>/             one output file per gate, and results.json
     events.jsonl
     approvals.jsonl
     result.json
@@ -303,7 +303,7 @@ Each step has its own context directory, `context/NN-<step>-<attempt>/` in the r
 |---|---|---|
 | planner | task file, knowledge, lane procedure, repo map | when re-planning: the previous plan and the denial reason or the answers |
 | worker | task file, knowledge, lane procedure, rubric, repo map | `plan.json`; on iteration: gate output, review findings, the previous work report, a denial reason |
-| reviewer | task file, knowledge, rubric, repo map | `plan.json`, `diff.patch`, gate results, the work report marked as unverified claims |
+| reviewer | task file, knowledge, rubric, repo map | `plan.json`, `diff.patch`, gate results, the work report marked as unverified claims, the out-of-plan files of the `scope` check (`scope.md`) |
 
 Design decisions, each with its cost:
 
@@ -414,6 +414,34 @@ Gates run after every `implement` attempt and before any model reviews the work.
 `guardrail_regression` exists for self-hosting. The worktree's own tests could be edited together with the code they test. This gate runs the guardrail tests from the control copy with the worktree's source on the import path, so a change that weakens the policy has to get past tests it could not touch.
 
 A separate `scope` check compares the diff with the plan's `files_to_touch`. It does not fail the run. It adds the out-of-plan files to the reviewer's context.
+
+**Running.** A `gate` step runs every gate it lists, in order, and all of them even after one fails, so the next attempt sees every problem at once. The `scope` check runs first, before any command can leave files in the worktree; a plan entry is a file, a directory or a glob, matched as protected paths are, and a rename touches both of its paths. Each gate writes `gates/<attempt>/<name>.txt`, which starts with a one-line summary; `gates/<attempt>/results.json` records each gate's status (`pass`, `fail` or `skipped`), the step outcome and the out-of-plan files. A gate folder is written once. The diff-reading gates see what `diff.patch` holds: committed, uncommitted and untracked changes against the base commit.
+
+**Configuration.** `project.yaml`:
+
+```yaml
+version: 1
+repo: /path/to/project            # relative paths resolve against the home repository
+protected_paths: [src/control_plane/policy/, tests/guardrails/]
+gates:
+  format: {argv: [uv, run, ruff, format, --check, .]}
+  lint: {argv: [uv, run, ruff, check, .]}
+  tests: {argv: [uv, run, pytest, -q], timeout_s: 1800}
+  coverage: {argv: [uv, run, pytest, -q, --cov, "--cov-report=json:{report}"], threshold: 85}
+  test_integrity: {patterns: ["test_*.py", "*_test.py", conftest.py]}
+  diff_size: {max_changed_lines: 1000}
+  secrets: {patterns: {internal_token: "itk_[a-z0-9]{24}"}, ignore_paths: [tests/fixtures/]}
+  guardrail_regression: {argv: [uv, run, pytest, -q, tests/guardrails], source: src, control: /path/to/project-control}
+```
+
+- `format`, `lint` and `tests` fail on a non-zero exit, a timeout, or a command that cannot start. Commands run in the worktree through the `run_command` runner (section 10.2), with `PYTHONDONTWRITEBYTECODE` set so the checks leave no bytecode in the worktree.
+- `coverage` replaces `{report}` with a path outside the worktree, keeps the coverage data file there too, and reads the total of the coverage.py JSON report. The threshold is the one in `project.yaml`, not the worktree's own configuration. A missing or unreadable report fails the gate.
+- `test_integrity` runs nothing: it parses the test files of the worktree and of the base commit with `ast`. A test is `path::name` (`path::Class::name` in a `Test*` class); one that existed at the base and is gone fails the gate, so renaming a test counts as deleting it. The count includes each case of a `parametrize` whose values are a literal list, tuple or set, so dropping a case is a fall in the count. A marker is `pytest.mark.skip`, `skipif` or `xfail`, a `pytest.skip`, `pytest.xfail` or `pytest.importorskip` call, or a `unittest` skip decorator; a file with more markers than at the base fails the gate. A worktree test file that does not parse fails it.
+- `secrets` checks every added line against built-in patterns (cloud and API keys, tokens, private keys, credential assignments) and the extra `patterns`. Its output names the file, the line and the pattern, never the matched text, because the output goes to the next worker and the reviewer.
+- `guardrail_regression` runs its command in the control checkout (default: the repo path with `-control` appended) with the worktree's `source` folder as `PYTHONPATH` and `PYTHONSAFEPATH` set, so the worktree's code is imported ahead of any installed copy and `python -m` does not put the control checkout's own directory first. The command must not add the control's source to the import path itself, for example through pytest's `pythonpath` option.
+- A command gate that `project.yaml` does not configure is `skipped` and does not fail the step. `test_integrity`, `diff_size` and `secrets` need no command and always run, with the defaults above.
+
+Commands from `project.yaml` cannot be edited by the agent, but the tools they run still read their own configuration from the worktree (a linter's rule set, for example). A change to such a file is visible in the diff and is the reviewer's to judge; listing it under `protected_paths` puts it at the top of the merge approval.
 
 ## 12. Approvals and parking
 

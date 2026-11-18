@@ -1,4 +1,4 @@
-"""The command runner behind `run_command` (SPEC.md section 10.2).
+"""The command runner behind `run_command` (docs/SPEC.md section 10.2).
 
 A command is an argv list and never goes through a shell. It runs in the worktree, in its
 own session, so a timeout kills the whole process group and not only the direct child.

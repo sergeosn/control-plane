@@ -1,4 +1,4 @@
-"""The tools as declared to the model (SPEC.md section 10.4).
+"""The tools as declared to the model (docs/SPEC.md section 10.4).
 
 Which tools a role gets is decided by the policy (Task 7); this module only knows how to
 describe each tool. Ordinary tools are not strict: strict mode is reserved for the submit

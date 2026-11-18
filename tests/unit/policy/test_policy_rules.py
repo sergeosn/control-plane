@@ -1,4 +1,4 @@
-"""Task 7: the rules loader (SPEC.md section 10.3).
+"""Task 7: the rules loader (docs/SPEC.md section 10.3).
 
 `rules/tools.yaml` is loaded with validation. A malformed file is rejected at load with the
 position of the error, so a human can fix it without guessing.

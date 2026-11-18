@@ -1,4 +1,4 @@
-"""One line of a run's `events.jsonl` (SPEC.md section 5)."""
+"""One line of a run's `events.jsonl` (docs/SPEC.md section 5)."""
 
 from pydantic import AwareDatetime, Field
 

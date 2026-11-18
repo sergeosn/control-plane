@@ -1,5 +1,5 @@
 """Task 8: `transcript.jsonl` holds one record per message part; consecutive records of the
-same role form one message when the transcript is reloaded (SPEC.md section 8.6)."""
+same role form one message when the transcript is reloaded (docs/SPEC.md section 8.6)."""
 
 from pathlib import Path
 

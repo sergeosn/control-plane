@@ -1,4 +1,4 @@
-"""The approval queue behind `cplane approvals`, `approve` and `deny` (SPEC.md section 12).
+"""The approval queue behind `cplane approvals`, `approve` and `deny` (docs/SPEC.md section 12).
 
 There is one queue, and it is the union of every run's `approvals.jsonl`: an entry is raised
 as one line and decided as a second line with the same id, so the latest line of an id is

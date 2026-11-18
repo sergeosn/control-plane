@@ -1,4 +1,4 @@
-"""The OpenAI-compatible client (SPEC.md sections 8.2, 8.3 and 14).
+"""The OpenAI-compatible client (docs/SPEC.md sections 8.2, 8.3 and 14).
 
 The gateway is a LiteLLM proxy that speaks the chat-completions format, so this client
 translates between the engine's vocabulary (`control_plane.llm.types`, modelled on the

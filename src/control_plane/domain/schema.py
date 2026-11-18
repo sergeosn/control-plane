@@ -1,4 +1,4 @@
-"""JSON Schema export for strict tool definitions (SPEC.md section 8.3).
+"""JSON Schema export for strict tool definitions (docs/SPEC.md section 8.3).
 
 A strict schema needs `additionalProperties: false` on every object and every property listed
 in `required`. Optional fields therefore become required-but-nullable, and `default` keywords

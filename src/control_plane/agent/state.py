@@ -1,4 +1,4 @@
-"""`state.json` and `usage.json` of a step (SPEC.md sections 5 and 8.6).
+"""`state.json` and `usage.json` of a step (docs/SPEC.md sections 5 and 8.6).
 
 `state.json` is rewritten after every model response and every tool result. It holds the
 budget counters, the calls of the current model turn with their status, and the counters of

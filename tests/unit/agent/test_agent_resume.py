@@ -1,4 +1,5 @@
-"""Task 9: parking creates approval entries and a step resumes from its transcript (SPEC.md 12).
+"""Task 9: parking creates approval entries and a step resumes from its transcript
+(docs/SPEC.md 12).
 
 Every case parks a worker step with `ScriptedClient`, decides the approval the way a human
 would through `approvals.jsonl`, and resumes the step with a fresh executor, so nothing

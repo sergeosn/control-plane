@@ -1,4 +1,4 @@
-"""The path jail (SPEC.md section 10.2).
+"""The path jail (docs/SPEC.md section 10.2).
 
 Every path argument a tool receives is resolved with symlinks followed and must fall inside
 one of the roots: the worktree (readable, and writable for the worker) and the run's

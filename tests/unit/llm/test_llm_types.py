@@ -1,4 +1,4 @@
-"""Task 5: request and response types that mirror the Messages API (SPEC.md section 8.2)."""
+"""Task 5: request and response types that mirror the Messages API (docs/SPEC.md section 8.2)."""
 
 import pytest
 from pydantic import ValidationError

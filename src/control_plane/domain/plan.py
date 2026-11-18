@@ -1,4 +1,4 @@
-"""The planner's artifact (SPEC.md section 8.4)."""
+"""The planner's artifact (docs/SPEC.md section 8.4)."""
 
 from pydantic import Field
 

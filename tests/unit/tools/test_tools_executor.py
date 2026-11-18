@@ -1,7 +1,7 @@
 """Task 6: the tool executor runs one tool call and answers with a `tool_result` body.
 
 A failed tool returns `is_error` with a message that says what went wrong and what to try
-(SPEC.md section 8.2). Truncation is always announced (section 9).
+(docs/SPEC.md section 8.2). Truncation is always announced (section 9).
 """
 
 import os

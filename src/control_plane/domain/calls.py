@@ -1,4 +1,4 @@
-"""The audit records of one step: every model call and every tool call (SPEC.md section 10.1).
+"""The audit records of one step: every model call and every tool call (docs/SPEC.md section 10.1).
 
 The loop appends them to `llm_calls.jsonl` and `tool_calls.jsonl` inside the step folder
 (section 5). The index reads them (section 14), and the metrics of section 16 are computed

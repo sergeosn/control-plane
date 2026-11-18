@@ -1,4 +1,4 @@
-"""What each role is given (SPEC.md section 9, the per-role table).
+"""What each role is given (docs/SPEC.md section 9, the per-role table).
 
 `always` are the sources every step of the role indexes. `required` and `optional` name the
 step-specific inputs, which are fields of `StepInputs`: a step must be given every required
@@ -30,6 +30,6 @@ RECIPES: dict[str, Recipe] = {
     "reviewer": Recipe(
         always=("task", "knowledge", "rubric", "repo_map"),
         required=("plan", "diff", "work_report"),
-        optional=("gate_outputs",),
+        optional=("gate_outputs", "out_of_plan"),
     ),
 }

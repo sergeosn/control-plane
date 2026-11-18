@@ -1,4 +1,4 @@
-"""The reviewer's artifact (SPEC.md section 8.4).
+"""The reviewer's artifact (docs/SPEC.md section 8.4).
 
 There is no verdict field. The engine derives the verdict from the rows, criteria and
 findings, so the model cannot pass a review by declaring it passed.

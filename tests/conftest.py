@@ -1,6 +1,6 @@
 """Shared test configuration.
 
-Tests never touch the network or a model (SPEC.md section 16). The fixture below
+Tests never touch the network or a model (docs/SPEC.md section 16). The fixture below
 enforces that in code: any attempt to resolve a host or connect a socket fails the test.
 
 The one exception is a test marked `live` while `CPLANE_LIVE=1` is set (Task 10): the live

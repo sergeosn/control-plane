@@ -1,4 +1,4 @@
-"""Task 6: the command runner (SPEC.md section 10.2).
+"""Task 6: the command runner (docs/SPEC.md section 10.2).
 
 argv only, never a shell; the worktree as working directory; a timeout that kills the whole
 process group; an environment built from an allowlist with a temporary HOME.

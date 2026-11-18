@@ -1,4 +1,4 @@
-"""A harness that runs `ApiLoopExecutor` against `ScriptedClient` (SPEC.md section 16).
+"""A harness that runs `ApiLoopExecutor` against `ScriptedClient` (docs/SPEC.md section 16).
 
 Shared by the unit tests of the loop and the guardrail regression suite. It builds a home
 repository, a run folder, a worktree and a policy from the shipped rules, and offers

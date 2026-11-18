@@ -1,4 +1,4 @@
-# Tool-call classification (SPEC.md section 10.3).
+# Tool-call classification (docs/SPEC.md section 10.3).
 #
 # Evaluation order: hard checks first, then the first matching rule, then `default`.
 # Classes: read and write-local are allowed; write-external and destructive park the run

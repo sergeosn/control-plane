@@ -1,4 +1,4 @@
-"""Cost of a model call from the price table in `plane.yaml` (SPEC.md section 8.2).
+"""Cost of a model call from the price table in `plane.yaml` (docs/SPEC.md section 8.2).
 
 Rates are USD per million tokens, one per token class the API reports. A model that is not
 in the table is an error: a call must never be priced at zero because nobody wrote its rate.

@@ -1,4 +1,4 @@
-"""The worker's artifact (SPEC.md section 8.4).
+"""The worker's artifact (docs/SPEC.md section 8.4).
 
 The report does not list changed files or commands run: the engine takes those from git and
 from its own tool-call log, because a self-report is a claim and the log is a fact.

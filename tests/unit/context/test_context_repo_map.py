@@ -1,4 +1,4 @@
-"""Task 12: the repo map (SPEC.md section 9).
+"""Task 12: the repo map (docs/SPEC.md section 9).
 
 The tree of tracked files with line counts and, for Python files, top-level classes and
 functions from `ast`. Deep directories are collapsed to keep it bounded, and the collapse is

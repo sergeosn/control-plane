@@ -1,4 +1,4 @@
-"""Task 2: the task file format (SPEC.md section 6) round-trips and rejects malformed files."""
+"""Task 2: the task file format (docs/SPEC.md section 6) round-trips and rejects malformed files."""
 
 from pathlib import Path
 

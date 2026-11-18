@@ -1,4 +1,4 @@
-"""File primitives of the store (SPEC.md section 5).
+"""File primitives of the store (docs/SPEC.md section 5).
 
 Whole-file writes, JSON among them, go to a temporary name in the same directory and are
 renamed into place, so a reader never sees a half-written file and a crash leaves no partial

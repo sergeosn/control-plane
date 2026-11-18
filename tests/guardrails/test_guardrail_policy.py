@@ -1,4 +1,4 @@
-"""Guardrail regression suite, classification (SPEC.md sections 10.3 and 16).
+"""Guardrail regression suite, classification (docs/SPEC.md sections 10.3 and 16).
 
 These cases drive the policy and the executor the way the loop does (section 8.2): a call
 is classified first and executed only on `allow`. The cases that script a whole model turn

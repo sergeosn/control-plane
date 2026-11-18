@@ -1,4 +1,4 @@
-"""`manifest.json`: what a run was given (SPEC.md section 9).
+"""`manifest.json`: what a run was given (docs/SPEC.md section 9).
 
 Hashes make the run reproducible in the sense that its exact inputs can be reconstructed.
 """

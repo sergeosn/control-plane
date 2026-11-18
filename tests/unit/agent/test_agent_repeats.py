@@ -1,5 +1,5 @@
 """Task 8: the same tool with the same arguments three times in a row adds a notice, five
-times fails the step (SPEC.md section 8.5)."""
+times fails the step (docs/SPEC.md section 8.5)."""
 
 from control_plane.agent import FAIL_AT, NOTICE_AT, RepeatTracker
 

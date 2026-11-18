@@ -1,4 +1,5 @@
-"""Task 9: `cplane approvals`, `cplane approve` and `cplane deny` (SPEC.md sections 12 and 14)."""
+"""Task 9: `cplane approvals`, `cplane approve` and `cplane deny` (docs/SPEC.md sections 12
+and 14)."""
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Task 6: the tool input models and the tool definitions sent to the model (SPEC.md 10.4)."""
+"""Task 6: the tool input models and the tool definitions sent to the model (docs/SPEC.md 10.4)."""
 
 import pytest
 from pydantic import ValidationError

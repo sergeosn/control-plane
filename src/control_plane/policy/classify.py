@@ -1,4 +1,4 @@
-"""`classify(role, call)` (SPEC.md section 10.3).
+"""`classify(role, call)` (docs/SPEC.md section 10.3).
 
 Evaluation order: hard checks first, then the first matching rule, then the default. The
 hard checks here are the role's tool exposure (section 10.4) and the shape of `argv`. The

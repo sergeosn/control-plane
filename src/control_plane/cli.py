@@ -1,7 +1,7 @@
 """The `cplane` command line.
 
 Every command calls the application layer in `control_plane.app` and never writes files or
-the index itself (SPEC.md section 14). Every command other than `init` finds the home
+the index itself (docs/SPEC.md section 14). Every command other than `init` finds the home
 repository through `--home` or `CPLANE_HOME` (`resolve_home`).
 """
 

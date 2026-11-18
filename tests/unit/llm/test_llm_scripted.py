@@ -1,4 +1,4 @@
-"""Task 5: `ScriptedClient` replays prepared responses in order (SPEC.md section 16)."""
+"""Task 5: `ScriptedClient` replays prepared responses in order (docs/SPEC.md section 16)."""
 
 import pytest
 

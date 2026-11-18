@@ -1,4 +1,4 @@
-"""Task 12: `BRIEF.md` (SPEC.md section 9).
+"""Task 12: `BRIEF.md` (docs/SPEC.md section 9).
 
 The brief is the first user message and stays under roughly 1,500 tokens. It states the role
 and what it must produce, the task goal and acceptance criteria, the hard rules of the role,

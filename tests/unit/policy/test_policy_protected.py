@@ -1,4 +1,4 @@
-"""Task 7: protected-path detection (SPEC.md section 10.2)."""
+"""Task 7: protected-path detection (docs/SPEC.md section 10.2)."""
 
 import pytest
 

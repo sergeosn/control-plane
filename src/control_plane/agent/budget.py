@@ -1,4 +1,4 @@
-"""Step budgets (SPEC.md section 8.5).
+"""Step budgets (docs/SPEC.md section 8.5).
 
 Four limits per step: turns, tokens, cost and wall time. They are checked before each model
 call. At 80% of any of them the next `tool_result` carries a notice with what is left; a

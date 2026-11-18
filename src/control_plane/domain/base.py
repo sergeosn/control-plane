@@ -2,7 +2,7 @@
 
 Every model forbids unknown keys, so a file with a misspelt or foreign key is rejected
 instead of silently losing data, and so the exported JSON Schema carries
-`additionalProperties: false` on every object (SPEC.md section 8.3).
+`additionalProperties: false` on every object (docs/SPEC.md section 8.3).
 
 File formats: JSON files are written indented with a trailing newline. JSONL files hold one
 compact JSON object per line (`events.jsonl`, `approvals.jsonl`).

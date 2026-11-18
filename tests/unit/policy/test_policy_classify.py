@@ -1,4 +1,4 @@
-"""Task 7: `classify(role, call)` (SPEC.md section 10.3).
+"""Task 7: `classify(role, call)` (docs/SPEC.md section 10.3).
 
 Evaluation order: hard checks (role exposure, well-formed argv) first, then the first
 matching rule, then the default. Every decision carries the rule id that produced it and is

@@ -1,4 +1,4 @@
-"""An entry in the approval queue (SPEC.md section 12), one line of `approvals.jsonl`."""
+"""An entry in the approval queue (docs/SPEC.md section 12), one line of `approvals.jsonl`."""
 
 from datetime import datetime
 from typing import Literal, Self

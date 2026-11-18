@@ -1,4 +1,4 @@
-"""Task 11: `diff.patch` matches the changes made in the worktree (SPEC.md section 9)."""
+"""Task 11: `diff.patch` matches the changes made in the worktree (docs/SPEC.md section 9)."""
 
 from pathlib import Path
 

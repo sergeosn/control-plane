@@ -1,4 +1,4 @@
-"""Task 2: the engine derives the review verdict (SPEC.md section 8.4)."""
+"""Task 2: the engine derives the review verdict (docs/SPEC.md section 8.4)."""
 
 import pytest
 

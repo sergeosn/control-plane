@@ -1,4 +1,4 @@
-"""Input models of the seven tools of SPEC.md section 10.4.
+"""Input models of the seven tools of docs/SPEC.md section 10.4.
 
 Each model is the contract the model's `tool_use` input is validated against before the
 tool runs. Unknown keys are rejected, so a drifted or invented argument is an error the

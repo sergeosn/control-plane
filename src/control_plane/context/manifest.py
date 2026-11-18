@@ -1,4 +1,4 @@
-"""Building and verifying `manifest.json` (SPEC.md section 9).
+"""Building and verifying `manifest.json` (docs/SPEC.md section 9).
 
 The manifest records what a run was given: the task file hash, the project base commit, the
 engine commit, hashes of the lane's flow, rubric and role prompts and of the rules, the

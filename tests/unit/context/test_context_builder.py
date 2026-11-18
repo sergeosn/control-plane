@@ -1,4 +1,4 @@
-"""Task 12: per-role context recipes and `INDEX.md` (SPEC.md section 9).
+"""Task 12: per-role context recipes and `INDEX.md` (docs/SPEC.md section 9).
 
 `build_step_context` only computes; it writes nothing. The app service writes its files.
 """
@@ -52,7 +52,11 @@ FULL_INPUTS = {
         denial_reason="Do not merge yet.",
     ),
     "reviewer": StepInputs(
-        plan=PLAN, diff=DIFF, gate_outputs={"tests": "1 passed\n"}, work_report=REPORT
+        plan=PLAN,
+        diff=DIFF,
+        gate_outputs={"tests": "1 passed\n"},
+        work_report=REPORT,
+        out_of_plan=("notes.txt",),
     ),
 }
 MINIMAL_INPUTS = {

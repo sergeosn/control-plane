@@ -1,4 +1,4 @@
-"""Task 6: the path jail (SPEC.md section 10.2).
+"""Task 6: the path jail (docs/SPEC.md section 10.2).
 
 Every path argument is resolved with symlinks followed and must fall inside the roots.
 """

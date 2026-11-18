@@ -1,4 +1,4 @@
-"""The home repository: the git repository that holds everything durable (SPEC.md section 5).
+"""The home repository: the git repository that holds everything durable (docs/SPEC.md section 5).
 
 `create_home` lays out a new home from the template shipped with the package and makes its
 first commit. `Home.locate` is how every command finds an existing home.

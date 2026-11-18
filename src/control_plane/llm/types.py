@@ -1,6 +1,6 @@
 """Request and response types that mirror the parts of the Messages API the loop uses.
 
-SPEC.md section 8.2: text and `tool_use` blocks in a response, `tool_result` blocks in the
+docs/SPEC.md section 8.2: text and `tool_use` blocks in a response, `tool_result` blocks in the
 next user message, `stop_reason`, and the four usage fields. Nothing here depends on an SDK,
 so the loop (section 8.2), the scripted client (section 16) and the real client (Task 10)
 share one vocabulary.

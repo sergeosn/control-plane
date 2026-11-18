@@ -1,4 +1,4 @@
-"""Loop detection (SPEC.md section 8.5).
+"""Loop detection (docs/SPEC.md section 8.5).
 
 The same tool with the same arguments three times in a row adds a notice to the
 `tool_result`; five times fails the step. The tracker is a model so it can live in

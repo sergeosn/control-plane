@@ -1,4 +1,4 @@
-"""Guardrail regression (SPEC.md sections 9 and 16): the reviewer never sees the worker's
+"""Guardrail regression (docs/SPEC.md sections 9 and 16): the reviewer never sees the worker's
 transcript.
 
 The worker's reasoning would argue the reviewer into agreement, so it is kept out of the

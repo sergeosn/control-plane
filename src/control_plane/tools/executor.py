@@ -1,6 +1,6 @@
 """The tool executor: runs one tool call and produces the body of its `tool_result`.
 
-The executor is the last check before anything touches disk (SPEC.md section 10.1): it
+The executor is the last check before anything touches disk (docs/SPEC.md section 10.1): it
 refuses a tool it was not given, validates the arguments with the tool's Pydantic model,
 resolves every path through the jail, and turns every failure into an `is_error` result
 whose message says what went wrong and what to try (section 8.2). It never raises for a
@@ -39,7 +39,7 @@ _SEARCH_LINE_CHARS = 200
 
 @dataclass(frozen=True)
 class Limits:
-    """Truncation and timeout limits. The defaults follow SPEC.md section 9."""
+    """Truncation and timeout limits. The defaults follow docs/SPEC.md section 9."""
 
     read_lines: int = 400
     list_entries: int = 500

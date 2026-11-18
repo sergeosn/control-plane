@@ -1,4 +1,4 @@
-"""The tool loop, budgets, loop detection (SPEC.md sections 8.2 to 8.6)."""
+"""The tool loop, budgets, loop detection (docs/SPEC.md sections 8.2 to 8.6)."""
 
 from control_plane.agent.budget import BudgetCheck, BudgetCounters, StepBudget, check_budget
 from control_plane.agent.loop import (

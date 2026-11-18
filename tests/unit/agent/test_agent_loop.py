@@ -1,4 +1,5 @@
-"""Task 8: `ApiLoopExecutor` runs one step against the `LLMClient` protocol (SPEC.md 8.2 to 8.6).
+"""Task 8: `ApiLoopExecutor` runs one step against the `LLMClient` protocol
+(docs/SPEC.md 8.2 to 8.6).
 
 Every case drives the loop with `ScriptedClient` and reads what the step folder holds.
 """

@@ -1,4 +1,4 @@
-"""Task 1: the empty package has the layout from SPEC.md section 17 and the checks run."""
+"""Task 1: the empty package has the layout from docs/SPEC.md section 17 and the checks run."""
 
 import asyncio
 import importlib

@@ -1,4 +1,4 @@
-"""The SQLite index (SPEC.md section 14): a queryable copy of what the files hold.
+"""The SQLite index (docs/SPEC.md section 14): a queryable copy of what the files hold.
 
 Files first and index second. Every row here is derived from a task file or a run folder,
 so the database can be deleted and rebuilt at any time (`Index.rebuild`, behind

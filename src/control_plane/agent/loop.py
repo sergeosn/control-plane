@@ -1,4 +1,5 @@
-"""`ApiLoopExecutor`: the tool loop of SPEC.md section 8.2, with parking and resume (section 12).
+"""`ApiLoopExecutor`: the tool loop of docs/SPEC.md section 8.2, with parking and resume
+(section 12).
 
 The loop knows the `LLMClient` protocol, the policy, the tool executor and the run folder,
 and nothing about the flow. It takes a `StepContext` and returns a `StepResult`: a validated

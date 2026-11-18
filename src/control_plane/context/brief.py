@@ -1,4 +1,4 @@
-"""`BRIEF.md`: the first user message of a step (SPEC.md section 9).
+"""`BRIEF.md`: the first user message of a step (docs/SPEC.md section 9).
 
 It states the role and what it must produce, the task goal and acceptance criteria, the few
 hard rules of the role, where the index is, and how to finish. It stays under

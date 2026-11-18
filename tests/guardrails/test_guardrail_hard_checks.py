@@ -1,4 +1,4 @@
-"""Guardrail regression suite, hard checks (SPEC.md sections 10.2 and 16).
+"""Guardrail regression suite, hard checks (docs/SPEC.md sections 10.2 and 16).
 
 These cases drive the tool executor directly: a call that reaches it with a forbidden path
 or a secret in the engine's environment must come back denied, and nothing outside the roots

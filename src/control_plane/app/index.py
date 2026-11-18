@@ -1,4 +1,4 @@
-"""Application service behind `cplane reindex` (SPEC.md sections 5 and 14)."""
+"""Application service behind `cplane reindex` (docs/SPEC.md sections 5 and 14)."""
 
 from dataclasses import dataclass
 

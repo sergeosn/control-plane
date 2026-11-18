@@ -1,4 +1,4 @@
-"""The context of one agent step: its files, `INDEX.md` and `BRIEF.md` (SPEC.md section 9).
+"""The context of one agent step: its files, `INDEX.md` and `BRIEF.md` (docs/SPEC.md section 9).
 
 `build_step_context` computes every file from the home repository, the task file, the
 worktree and the step-specific inputs, following the role's recipe (`recipes.RECIPES`). It
@@ -28,6 +28,7 @@ BRIEF_FILE = "BRIEF.md"
 INDEX_FILE = "INDEX.md"
 TASK_FILE = "task.md"
 REPO_MAP_FILE = "repo_map.md"
+SCOPE_FILE = "scope.md"
 KNOWLEDGE_DIR = "knowledge"
 ARCHIVE_DIR = "archive"
 
@@ -52,10 +53,12 @@ class StepInputs:
     """Gate name to its output, as the last gate run wrote it."""
     denial_reason: str | None = None
     answers: str | None = None
+    out_of_plan: tuple[str, ...] = ()
+    """The scope check: changed files the plan's `files_to_touch` did not name."""
 
     def given(self) -> list[str]:
         """The names of the inputs that carry something."""
-        return [f.name for f in fields(self) if getattr(self, f.name) not in (None, {})]
+        return [f.name for f in fields(self) if getattr(self, f.name) not in (None, {}, ())]
 
 
 @dataclass(frozen=True)
@@ -146,6 +149,19 @@ def render_index(files: list[ContextFile], context_dir: Path) -> str:
         count = file.lines
         unit = "line" if count == 1 else "lines"
         lines.append(f"- `{context_dir / file.path}` ({count} {unit}): {file.description}")
+    return "\n".join(lines) + "\n"
+
+
+def render_scope(paths: tuple[str, ...]) -> str:
+    lines = [
+        "# Out-of-plan files",
+        "",
+        "The diff changes these files, which the plan's `files_to_touch` does not name. The "
+        "scope check does not fail the run; judge whether each change is justified by the "
+        "task, the plan or the work report's deviations.",
+        "",
+    ]
+    lines += [f"- `{path}`" for path in paths]
     return "\n".join(lines) + "\n"
 
 
@@ -245,6 +261,14 @@ def _step_files(role: str, inputs: StepInputs) -> list[ContextFile]:
         if not _GATE_NAME.fullmatch(name):
             raise ContextError(f"gate name {name!r} cannot name a file")
         files.append(_text(f"gates/{name}.txt", f"output of the {name} gate", output))
+    if inputs.out_of_plan:
+        files.append(
+            _text(
+                SCOPE_FILE,
+                "the scope check: changed files the plan did not list",
+                render_scope(inputs.out_of_plan),
+            )
+        )
     if inputs.review is not None:
         files.append(
             _text(

@@ -1,4 +1,4 @@
-"""Task 12: `manifest.json` hashes (SPEC.md section 9).
+"""Task 12: `manifest.json` hashes (docs/SPEC.md section 9).
 
 The manifest records the task file hash, the base and engine commits, hashes of the flow,
 rubric, role prompts and rules, the model per role, the budget, and every context file with

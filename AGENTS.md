@@ -1,12 +1,12 @@
 # AGENTS.md
 
 Control Plane (package `control_plane`, CLI `cplane`) takes a task from a backlog to a merged
-branch. The specification is `SPEC.md`; the task plan is `TASKS.md`. Section numbers in tasks
-refer to `SPEC.md`.
+branch. The specification is `docs/SPEC.md`; the task plan is `docs/TASKS.md`. Section numbers in tasks
+refer to `docs/SPEC.md`.
 
 ## Package layout
 
-`src/control_plane/` (SPEC.md section 17):
+`src/control_plane/` (docs/SPEC.md section 17):
 
 | Package      | Holds                                                                     |
 |--------------|---------------------------------------------------------------------------|
@@ -52,5 +52,5 @@ uv run pytest --cov
    never fails because an index write failed.
 
 Also: every task is done when its acceptance checks pass as automated tests, `ruff check` and
-`ruff format --check` are clean, coverage stays at or above 85%, and `SPEC.md` is updated if the
+`ruff format --check` are clean, coverage stays at or above 85%, and `docs/SPEC.md` is updated if the
 implementation had to differ from it. Write the tests for each "Done when" item before the code.

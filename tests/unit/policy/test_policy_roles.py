@@ -1,4 +1,4 @@
-"""Task 7: which tools each role gets (SPEC.md sections 8 and 10.4)."""
+"""Task 7: which tools each role gets (docs/SPEC.md sections 8 and 10.4)."""
 
 import pytest
 

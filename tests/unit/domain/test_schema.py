@@ -1,4 +1,4 @@
-"""Task 2: every exported JSON Schema is valid for a strict tool definition (SPEC.md 8.3)."""
+"""Task 2: every exported JSON Schema is valid for a strict tool definition (docs/SPEC.md 8.3)."""
 
 from collections.abc import Iterator
 from typing import Any

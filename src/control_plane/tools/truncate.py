@@ -1,4 +1,4 @@
-"""Truncation helpers. Truncation is always announced (SPEC.md section 9).
+"""Truncation helpers. Truncation is always announced (docs/SPEC.md section 9).
 
 Each truncated result says how much was dropped, so the model narrows its request instead
 of assuming it saw everything.

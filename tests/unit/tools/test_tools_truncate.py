@@ -1,4 +1,4 @@
-"""Task 6: truncation is always announced (SPEC.md section 9)."""
+"""Task 6: truncation is always announced (docs/SPEC.md section 9)."""
 
 from control_plane.tools import head_and_tail, numbered_lines
 

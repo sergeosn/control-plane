@@ -1,10 +1,10 @@
-# Control Plane home configuration (SPEC.md sections 5 and 14): model profiles, price
+# Control Plane home configuration (docs/SPEC.md sections 5 and 14): model profiles, price
 # table and defaults. Agents never write this file; change it by hand and commit.
 version: 1
 
 # Model profiles. A task's `roles` block maps each role to one of these names.
 # `wire_format` is `anthropic` for the Messages API or `openai-compatible` for a gateway
-# that exposes only chat completions (SPEC.md section 14). `strict` asks the endpoint for
+# that exposes only chat completions (docs/SPEC.md section 14). `strict` asks the endpoint for
 # strict tool schemas; it is on by default and can be turned off for a gateway that
 # rejects the `strict` key.
 profiles:
@@ -36,7 +36,7 @@ prices:
 
 defaults:
   lane: development
-  # Per run (SPEC.md section 8.5). The flow's `limits` block overrides these.
+  # Per run (docs/SPEC.md section 8.5). The flow's `limits` block overrides these.
   budget:
     max_iterations: 3
     max_cost_usd: 6.00

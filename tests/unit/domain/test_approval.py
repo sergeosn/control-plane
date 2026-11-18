@@ -1,4 +1,4 @@
-"""Task 2: approval queue entries (SPEC.md section 12) round-trip through JSONL."""
+"""Task 2: approval queue entries (docs/SPEC.md section 12) round-trip through JSONL."""
 
 from datetime import UTC, datetime
 

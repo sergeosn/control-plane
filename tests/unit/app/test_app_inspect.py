@@ -1,4 +1,4 @@
-"""Task 12: `cplane inspect <run> --context` on a scripted run (SPEC.md section 9).
+"""Task 12: `cplane inspect <run> --context` on a scripted run (docs/SPEC.md section 9).
 
 Per step: the files provided, the files actually read, and tokens by source.
 """

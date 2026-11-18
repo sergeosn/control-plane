@@ -1,4 +1,4 @@
-"""A home ready for context building (SPEC.md section 9), in a temporary directory.
+"""A home ready for context building (docs/SPEC.md section 9), in a temporary directory.
 
 It holds a registered project with knowledge files (one archived), a task file copied from
 `fixtures/tasks`, a project repository with a run worktree, and a run folder whose

@@ -2,4 +2,4 @@
 
 
 class ToolError(Exception):
-    """Carries a message that says what went wrong and what to try (SPEC.md section 8.2)."""
+    """Carries a message that says what went wrong and what to try (docs/SPEC.md section 8.2)."""

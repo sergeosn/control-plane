@@ -1,4 +1,4 @@
-"""Brief, index, repo map, manifest (SPEC.md section 9)."""
+"""Brief, index, repo map, manifest (docs/SPEC.md section 9)."""
 
 from control_plane.context.brief import BRIEF_TOKEN_BUDGET, estimate_tokens, render_brief
 from control_plane.context.builder import (

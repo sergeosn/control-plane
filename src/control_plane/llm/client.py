@@ -1,4 +1,4 @@
-"""The `LLMClient` protocol and `ScriptedClient` (SPEC.md sections 8.2 and 16).
+"""The `LLMClient` protocol and `ScriptedClient` (docs/SPEC.md sections 8.2 and 16).
 
 A client is built for one model profile, so a call carries only what changes between turns:
 the system prompt, the conversation and the tools. `max_tokens` can be raised for one call,
@@ -26,7 +26,7 @@ class LLMClient(Protocol):
 
 
 class RateLimitedError(Exception):
-    """A rate limit outlived the client's retries (SPEC.md section 8.2).
+    """A rate limit outlived the client's retries (docs/SPEC.md section 8.2).
 
     Any `LLMClient` may raise it. The loop parks the run with reason `rate_limit` and
     `resume_after`, the earliest time a resume should try the call again.

@@ -1,4 +1,4 @@
-"""Task 9: the approval queue behind `cplane approvals`, `approve` and `deny` (SPEC.md 12).
+"""Task 9: the approval queue behind `cplane approvals`, `approve` and `deny` (docs/SPEC.md 12).
 
 The queue is read from the `approvals.jsonl` of every run folder. A decision is appended to
 the run's file first and mirrored to the index second; an index failure never undoes it.

@@ -1,4 +1,4 @@
-"""Task 5: cost from the price table in `plane.yaml`, cache tokens included (SPEC.md 8.2)."""
+"""Task 5: cost from the price table in `plane.yaml`, cache tokens included (docs/SPEC.md 8.2)."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-"""Run folders (SPEC.md section 5).
+"""Run folders (docs/SPEC.md section 5).
 
 A run folder is written while the run is active, committed to the home repository when the
 run finishes, and immutable after that. `RunStore.verify_finished` reports any finished run

@@ -1,4 +1,4 @@
-"""Task 10: the OpenAI-compatible client (SPEC.md sections 8.2, 8.3 and 14).
+"""Task 10: the OpenAI-compatible client (docs/SPEC.md sections 8.2, 8.3 and 14).
 
 Every request is answered by an `httpx2.MockTransport`, so no test opens a socket. The
 mapping tests use `tests/fixtures/llm/openai_tool_call.json`, a real response of the proxy.

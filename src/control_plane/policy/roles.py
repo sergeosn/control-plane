@@ -1,4 +1,4 @@
-"""Which tools each role gets (SPEC.md sections 8 and 10.4).
+"""Which tools each role gets (docs/SPEC.md sections 8 and 10.4).
 
 The table is the first exposure check: a role calling a tool it does not have is denied
 before any rule is consulted. The executor repeats the check (section 10.1).

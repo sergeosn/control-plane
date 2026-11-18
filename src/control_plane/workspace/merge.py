@@ -1,4 +1,4 @@
-"""The `merge_and_verify` action (SPEC.md section 13).
+"""The `merge_and_verify` action (docs/SPEC.md section 13).
 
 It merges a run branch into `main` of the primary checkout with a merge commit and runs the
 project's full test suite there. Green, the merge stays. Red, `main` is reset to the

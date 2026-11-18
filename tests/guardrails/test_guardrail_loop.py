@@ -1,4 +1,4 @@
-"""Guardrail regression suite, the loop (SPEC.md sections 8.2, 8.5 and 16).
+"""Guardrail regression suite, the loop (docs/SPEC.md sections 8.2, 8.5 and 16).
 
 Each case scripts a whole model turn that attempts something forbidden and asserts the
 outcome through `ApiLoopExecutor`.

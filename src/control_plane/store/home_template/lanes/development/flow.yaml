@@ -1,4 +1,4 @@
-# The default development flow (SPEC.md section 7).
+# The default development flow (docs/SPEC.md section 7).
 #
 # Each step maps its outcomes to the next step under `next`. The key is deliberately not
 # `on`: YAML 1.1 parsers read a bare `on` as the boolean true.

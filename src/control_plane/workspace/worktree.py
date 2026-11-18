@@ -1,4 +1,4 @@
-"""Run worktrees: one per run, on branch `run/<run-id>` (SPEC.md sections 5 and 13).
+"""Run worktrees: one per run, on branch `run/<run-id>` (docs/SPEC.md sections 5 and 13).
 
 A run's worktree is the only place an agent can write. It lives at
 `<home>/.worktrees/<run-id>` and is created from the base commit recorded in the run's

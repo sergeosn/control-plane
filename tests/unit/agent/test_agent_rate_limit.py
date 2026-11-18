@@ -1,4 +1,4 @@
-"""Task 10: a persistent rate limit parks the step with its `resume_after` (SPEC.md 8.2, 12).
+"""Task 10: a persistent rate limit parks the step with its `resume_after` (docs/SPEC.md 8.2, 12).
 
 The client raises `RateLimitedError` the way the real client does once the SDK's retries are
 spent. The loop parks the run without an approval entry, keeps the time in `state.json`, and

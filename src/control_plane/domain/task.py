@@ -1,4 +1,4 @@
-"""The task file: Markdown with YAML front matter (SPEC.md section 6)."""
+"""The task file: Markdown with YAML front matter (docs/SPEC.md section 6)."""
 
 import re
 from typing import Literal, Self

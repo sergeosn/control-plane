@@ -1,4 +1,4 @@
-"""The rules file `rules/tools.yaml` (SPEC.md section 10.3).
+"""The rules file `rules/tools.yaml` (docs/SPEC.md section 10.3).
 
 The file is read with the YAML composer so that every value keeps its line and column.
 Validation runs through the Pydantic models below, and each validation error is reported

@@ -1,4 +1,4 @@
-"""Task 3: JSON files are written atomically and JSONL files are append-only (SPEC.md 5)."""
+"""Task 3: JSON files are written atomically and JSONL files are append-only (docs/SPEC.md 5)."""
 
 import json
 from datetime import UTC, datetime

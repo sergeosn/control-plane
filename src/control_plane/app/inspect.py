@@ -1,4 +1,4 @@
-"""`cplane inspect <run> --context` (SPEC.md section 9): the feedback loop for context work.
+"""`cplane inspect <run> --context` (docs/SPEC.md section 9): the feedback loop for context work.
 
 Per step it shows the files provided (from the manifest), which of them the model actually
 read (successful `read_file` calls in `tool_calls.jsonl`), what it read outside its context,

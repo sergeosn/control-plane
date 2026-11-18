@@ -1,4 +1,4 @@
-"""`transcript.jsonl` (SPEC.md section 8.6).
+"""`transcript.jsonl` (docs/SPEC.md section 8.6).
 
 One record per line, each a `Message`. The loop appends a record after every model response
 and after every tool result, so the file is current at every moment: a user turn that

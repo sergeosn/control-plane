@@ -1,4 +1,4 @@
-"""Writing a step's context and the run's manifest (SPEC.md section 9).
+"""Writing a step's context and the run's manifest (docs/SPEC.md section 9).
 
 `prepare_step_context` builds the files of one step with `control_plane.context`, writes
 them into `context/<NN-step-attempt>/` of the run folder, and records each file's hash in

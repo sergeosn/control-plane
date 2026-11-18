@@ -1,4 +1,4 @@
-"""Task 10: a live smoke test against the real endpoint (SPEC.md section 14).
+"""Task 10: a live smoke test against the real endpoint (docs/SPEC.md section 14).
 
 Skipped unless `CPLANE_LIVE=1`. It is the one test allowed to open a socket: the
 `no_network` fixture in `tests/conftest.py` stands down for a test marked `live` when

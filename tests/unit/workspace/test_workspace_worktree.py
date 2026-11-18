@@ -1,4 +1,4 @@
-"""Task 11: worktree creation and removal, branch naming, commit (SPEC.md sections 5, 13)."""
+"""Task 11: worktree creation and removal, branch naming, commit (docs/SPEC.md sections 5, 13)."""
 
 import shutil
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Task 3: `create_home` produces the layout from SPEC.md section 5 as a git repository."""
+"""Task 3: `create_home` produces the layout from docs/SPEC.md section 5 as a git repository."""
 
 import re
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Task 11: the `merge_and_verify` action with undo on red (SPEC.md section 13)."""
+"""Task 11: the `merge_and_verify` action with undo on red (docs/SPEC.md section 13)."""
 
 import sys
 from pathlib import Path
