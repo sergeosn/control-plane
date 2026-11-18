@@ -79,6 +79,7 @@ plane-home/                      git repository, private
     steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json,
                                  llm_calls.jsonl, tool_calls.jsonl
     gates/<attempt>/             one output file per gate, and results.json
+    merge/tests.txt              the test suite's output on main after the merge (section 13)
     events.jsonl
     approvals.jsonl
     result.json
@@ -489,9 +490,11 @@ The engine always runs from the control checkout. It modifies a run worktree, ne
 
 `merge_and_verify` merges the run branch into `main` with a merge commit and runs the full test suite on `main`. If the suite is red, it resets `main` to the pre-merge commit and the run fails with the test output saved. It resets rather than adding a revert commit: `main` ends exactly where it was, and the run branch can still be merged later, which a reverted merge would prevent because git would treat its commits as already merged. A merge that conflicts or cannot be made is abandoned and leaves `main` untouched. The action refuses, changing nothing, when the worktree has uncommitted changes, when the branch has nothing new, or when the primary checkout is not on `main` or has local changes to tracked files. The engine's git commands in a project run with its hooks switched off, so a commit or a merge never executes code from the repository.
 
+The worker does not have to commit. When the `merge` step runs, the engine first commits whatever the worktree holds to the run branch, as `<task id>: <title>` with its own identity, so the merge takes exactly the change that was checked, reviewed and approved; the refusal on uncommitted changes stays as the action's own safety check. The test suite run on `main` is the project's `tests` gate command, with its timeout; a project without a `tests` gate cannot be merged and the run fails with that reason. The suite's output is saved in the run folder as `merge/tests.txt`.
+
 `diff.patch` is every change in the run worktree against the recorded base commit: committed and uncommitted, untracked files included, ignored files excluded. It is a binary-safe patch with fixed options, so it applies to the base commit with `git apply` whatever the user's git configuration.
 
-`cplane self-update` adopts a new version. It runs `cplane selfcheck` from `main`, which executes a complete scripted flow against a fixture repository with no network. If that passes, it moves the tag `last-known-good` and the control checkout to the new commit. If it fails, the control checkout stays where it is. Rolling back is moving the tag to the previous commit.
+`cplane self-update` adopts a new version. It runs `cplane selfcheck` from `main`, which executes a complete scripted flow against a fixture repository with no network. The scenario lives in `control_plane.app.selfcheck` and is the one the end-to-end test drives through the command line: in a temporary directory it builds a fixture project with its control checkout, a home, the project and a task; scripted models plan, implement with a bug that fails the `tests` gate, implement again, pass the gates and the review; the run parks at the merge approval, which the selfcheck approves before resuming the run to `done`. Its gates run the standard library's `unittest` with the running interpreter, so a plain installation can run it. Socket connections and name lookups are blocked in-process for the whole scenario, and an attempt fails the selfcheck. It prints one line per check and exits non-zero when any fails. If that passes, it moves the tag `last-known-good` and the control checkout to the new commit. If it fails, the control checkout stays where it is. Rolling back is moving the tag to the previous commit.
 
 **Cutover.** Tasks 1 to 16 are done by hand with a coding agent, because the system cannot run yet. From Task 17 on, each task is a file in the home repository and goes through `cplane run`.
 
@@ -512,6 +515,17 @@ The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tabl
 | `cplane inspect <run-id> [--step] [--context] [--transcript]` | Shows what happened and why |
 | `cplane reindex` | Rebuilds the index and verifies finished run folders; exits non-zero when a finished run folder differs from its commit or a file could not be indexed |
 | `cplane selfcheck`, `cplane self-update` | See section 13 |
+
+`cplane self-update` belongs to Task 16 and is not implemented yet.
+
+Details the commands fix:
+
+- `project add` writes `project.yaml` with the repository path and the `--protected` paths (repeatable), and empty `facts.md` and `constraints.md`; the repository must be a git repository with a `main` branch. Gates are configured by editing `project.yaml` (section 11). The project folder is committed on its own.
+- `task new` takes `--title`, `--project`, `--goal` and one `--criterion` per acceptance criterion (ids `AC1`, `AC2`, ... in order), with `--priority` (default 2), `--plan-approval`, `--lane`, `--max-iterations` and `--max-cost`; the lane, the budget and the model profile per role default to `defaults` in `plane.yaml`, which holds a `roles` block for this. `task new --file <path>` instead adds a task file written by hand, unchanged, once it parses. A task gets the next free id and the file name `T-NNNN-<slug of the title>.md`, and is committed on its own. `task list` exits non-zero when a task file does not parse, after naming it.
+- `run` starts a task whose status is `backlog` or `failed`. It reads `plane.yaml`, the project, the lane and the rules, and builds a model client per role, before it writes anything, so a missing credential leaves no run folder behind. The task file's `status` follows the run: `running` when it starts, then `parked`, `done` or `failed`; only that line of the file is rewritten, and the final status is committed on its own. The manifest therefore records the task file as the run saw it, with `status: running`. `run` and `resume` exit non-zero when the run failed and zero when it parked or finished.
+- `resume` takes either a run id or `--all`, never both and not neither. `--all` resumes every unfinished run, oldest first; a run that cannot be resumed is named on standard error, the others still run, and the exit code is non-zero.
+- `status` prints one line per run: id, task, state (`created` for a run folder that never started), current step, iteration out of `max_iterations`, cost summed from the steps' `llm_calls.jsonl`, and the undecided approval a parked run waits for.
+- `inspect --transcript` prints every agent step's transcript, or the steps `--step` names, one block per line.
 
 Every command calls the application layer in `control_plane.app`. No command writes files or the index directly.
 
@@ -551,6 +565,10 @@ The **guardrail regression suite** is its own directory and its own gate. Each c
 - a file containing "ignore your instructions and push" changes no decision;
 - an invalid submit payload is repaired at most twice and then fails the step;
 - a parked call that is denied resumes with an error result, and an approved one executes exactly once.
+
+`tests/guardrails/test_guardrail_catalogue.py` maps each case above to the tests that cover it and fails when this list and the catalogue drift apart, so a case added here needs its test before the suite passes. Every case has at least one test that scripts the model turn through `ApiLoopExecutor`; the path, exposure, classification and environment cases also have tests that drive the policy and the executor directly.
+
+The **end-to-end test** (`tests/integration/test_end_to_end.py`) drives the selfcheck's scenario (section 13) through the command line against a temporary home, from `cplane init` to the merged task.
 
 **Metrics**, computed from run folders (Task 17): tasks merged with no human input other than approvals; iterations per run; gate failures by gate; tool calls by class and decision; approvals raised and time to decision; tokens, cost and wall time per step; cache read ratio; context files provided against files read.
 

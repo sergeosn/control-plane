@@ -89,6 +89,12 @@ class Git:
         self.run("commit", "--quiet", "--message", message)
         return self.head()
 
+    def commit_paths(self, message: str, *paths: str) -> str:
+        """Stage and commit `paths` only, leaving anything else staged as it is."""
+        self.add(*paths)
+        self.run("commit", "--quiet", "--message", message, "--", *paths)
+        return self.head()
+
     def head(self) -> str:
         return self.run("rev-parse", "HEAD").strip()
 

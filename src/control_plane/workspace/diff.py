@@ -149,7 +149,10 @@ def _full_index(tree: Worktree) -> Iterator[dict[str, str]]:
         temp_index = Path(scratch) / "index"
         env = {"GIT_INDEX_FILE": str(temp_index)}
         if index.exists():
-            shutil.copyfile(index, temp_index)
+            # copy2 keeps the index's mtime. Git compares an entry by content when its mtime
+            # is not older than the index (the racy-index check); a copy stamped later would
+            # pass a same-size edit made in the checkout's tick as unchanged.
+            shutil.copy2(index, temp_index)
         else:
             git.run("read-tree", "HEAD", env=env)
         git.run("add", "--all", env=env)

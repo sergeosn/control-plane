@@ -1,4 +1,4 @@
-"""`cplane inspect <run> --context` (docs/SPEC.md section 9): the feedback loop for context work.
+"""`cplane inspect <run> --context` and `--transcript` (docs/SPEC.md sections 9 and 14).
 
 Per step it shows the files provided (from the manifest), which of them the model actually
 read (successful `read_file` calls in `tool_calls.jsonl`), what it read outside its context,
@@ -18,7 +18,7 @@ from control_plane.context.brief import estimate_tokens
 from control_plane.context.builder import BRIEF_FILE
 from control_plane.context.manifest import ManifestError
 from control_plane.domain.calls import ToolCall
-from control_plane.llm.types import TextBlock, ToolResultBlock
+from control_plane.llm.types import Message, TextBlock, ToolResultBlock
 from control_plane.store.files import read_jsonl
 from control_plane.store.home import Home
 from control_plane.store.runs import STEPS_DIR, TOOL_CALLS_FILE, RunFolder, RunStore
@@ -84,18 +84,43 @@ def _step_name(folder: str) -> str:
     return folder.split("-", 1)[-1].rsplit("-", 1)[0]
 
 
+def _choose(folders: list[str], step: str | None, run_id: str) -> list[str]:
+    if step is None:
+        return folders
+    chosen = [f for f in folders if step in (f, _step_name(f))]
+    if not chosen:
+        raise InspectError(
+            f"no step {step!r} in run {run_id}; steps: {', '.join(folders) or 'none'}"
+        )
+    return chosen
+
+
+@dataclass(frozen=True)
+class StepTranscript:
+    step: str
+    messages: list[Message]
+
+
+def transcripts(home: Home, run_id: str, step: str | None = None) -> list[StepTranscript]:
+    """The transcript of every agent step of `run_id`, or of the steps `step` names."""
+    run = _open(home, run_id)
+    steps_dir = run.path / STEPS_DIR
+    folders = sorted(
+        entry.name
+        for entry in (steps_dir.iterdir() if steps_dir.is_dir() else [])
+        if (entry / TRANSCRIPT_FILE).is_file()
+    )
+    return [
+        StepTranscript(folder, load_transcript(steps_dir / folder / TRANSCRIPT_FILE))
+        for folder in _choose(folders, step, run_id)
+    ]
+
+
 def inspect_context(home: Home, run_id: str, step: str | None = None) -> list[StepContextReport]:
     """The context report of every step of `run_id`, or of the steps `step` names: a step
     folder (`01-plan-1`) or a step name (`plan`, every attempt)."""
     run = _open(home, run_id)
-    folders = list_steps(home, run_id)
-    if step is not None:
-        chosen = [f for f in folders if step in (f, _step_name(f))]
-        if not chosen:
-            raise InspectError(
-                f"no step {step!r} in run {run_id}; steps: {', '.join(folders) or 'none'}"
-            )
-        folders = chosen
+    folders = _choose(list_steps(home, run_id), step, run_id)
     try:
         manifest = read_manifest(run)
     except ManifestError as exc:

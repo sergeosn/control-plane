@@ -36,6 +36,11 @@ prices:
 
 defaults:
   lane: development
+  # The model profile per role of a task created with `cplane task new`.
+  roles:
+    planner: default
+    worker: default
+    reviewer: strict
   # Per run (docs/SPEC.md section 8.5). The flow's `limits` block overrides these.
   budget:
     max_iterations: 3

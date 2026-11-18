@@ -1,5 +1,7 @@
 """Task 11: `diff.patch` matches the changes made in the worktree (docs/SPEC.md section 9)."""
 
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -90,3 +92,29 @@ def test_user_diff_settings_do_not_change_the_patch_format(
     assert "--- a/app.py" in patch
     assert "+++ b/app.py" in patch
     assert "\x1b[" not in patch
+
+
+def test_a_same_size_edit_in_the_tick_the_index_was_written_is_in_the_diff(
+    project: Git, tree: Worktree
+) -> None:
+    """Git's racy-index check: an entry whose mtime is not older than the index file is
+    compared by content, not by its stat data. The patch is built from a copy of the index,
+    which must keep the index's mtime; a copy stamped later makes a same-size edit, made in
+    the tick of the checkout, look unchanged. The test pins that tick: the file and the index
+    carry the checkout's time, ctime is not trusted, and the copy is made a second later."""
+    project.run("config", "core.trustctime", "false")
+    app = tree.path / "app.py"
+    checked_out = os.stat(app)
+    index = Path(
+        Git(tree.path).run("rev-parse", "--path-format=absolute", "--git-path", "index").strip()
+    )
+    os.utime(index, ns=(checked_out.st_mtime_ns, checked_out.st_mtime_ns))
+    time.sleep(1.1)
+
+    app.write_text("def value():\n    return 3\n")
+    os.utime(app, ns=(checked_out.st_atime_ns, checked_out.st_mtime_ns))
+
+    patch = diff_patch(tree)
+
+    assert "+    return 3" in patch
+    assert ("modified", "app.py") in Git(tree.path).status()

@@ -1,12 +1,14 @@
 """The `cplane` command line.
 
 Every command calls the application layer in `control_plane.app` and never writes files or
-the index itself (docs/SPEC.md section 14). Every command other than `init` finds the home
-repository through `--home` or `CPLANE_HOME` (`resolve_home`).
+the index itself (docs/SPEC.md section 14). Every command other than `init` and `selfcheck`
+finds the home repository through `--home` or `CPLANE_HOME` (`resolve_home`). `run` and
+`resume` get their model clients from `make_clients`, with credentials from the environment.
 """
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -17,13 +19,27 @@ from control_plane.app import approvals as app_approvals
 from control_plane.app import home as app_home
 from control_plane.app import index as app_index
 from control_plane.app import inspect as app_inspect
+from control_plane.app import projects as app_projects
+from control_plane.app import runs as app_runs
+from control_plane.app import selfcheck as app_selfcheck
+from control_plane.app import status as app_status
+from control_plane.app import tasks as app_tasks
 from control_plane.app.approvals import ApprovalError
+from control_plane.app.clients import ClientFactory, RunError, environment_clients
 from control_plane.app.inspect import InspectError
+from control_plane.app.projects import ProjectError
+from control_plane.app.runs import RunOutcome
+from control_plane.app.status import StatusError
+from control_plane.app.tasks import TaskError
 from control_plane.domain import Approval
+from control_plane.flow import FlowError
+from control_plane.llm import CredentialsError
+from control_plane.llm.types import Message
 from control_plane.store.git import GitError
 from control_plane.store.home import ENV_VAR, Home, HomeExistsError, HomeNotFoundError
 from control_plane.store.index import DB_FILE
 from control_plane.store.runs import RunFinishedError
+from control_plane.workspace import WorkspaceError
 
 CommandError = (
     HomeExistsError,
@@ -32,7 +48,20 @@ CommandError = (
     ApprovalError,
     RunFinishedError,
     InspectError,
+    ProjectError,
+    TaskError,
+    RunError,
+    StatusError,
+    CredentialsError,
+    FlowError,
+    WorkspaceError,
 )
+USAGE_ERROR = 2
+
+
+def make_clients(environ: Mapping[str, str]) -> ClientFactory:
+    """The model clients of `run` and `resume`: real ones, credentials from the environment."""
+    return environment_clients(environ)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,6 +74,46 @@ def build_parser() -> argparse.ArgumentParser:
         "init", help="create a home repository with the development lane and default rules"
     )
     init.add_argument("path", help="where to create the home repository")
+
+    project = commands.add_parser("project", help="manage projects").add_subparsers(
+        dest="project_command", required=True
+    )
+    project_add = project.add_parser("add", help="register a project repository")
+    project_add.add_argument("name", help="the project's name, a plain folder name")
+    project_add.add_argument("--repo", required=True, help="the primary checkout, on main")
+    project_add.add_argument(
+        "--protected", action="append", default=[], help="a protected path (repeatable)"
+    )
+
+    task = commands.add_parser("task", help="manage task files").add_subparsers(
+        dest="task_command", required=True
+    )
+    task_new = task.add_parser("new", help="write a new task in the backlog")
+    task_new.add_argument("--file", help="add a task file written by hand, as it is")
+    task_new.add_argument("--title")
+    task_new.add_argument("--project")
+    task_new.add_argument("--goal")
+    task_new.add_argument(
+        "--criterion", action="append", default=[], help="an acceptance criterion (repeatable)"
+    )
+    task_new.add_argument("--priority", type=int, default=2)
+    task_new.add_argument("--plan-approval", action="store_true")
+    task_new.add_argument("--lane")
+    task_new.add_argument("--max-iterations", type=int)
+    task_new.add_argument("--max-cost", type=float, help="max cost of a run in USD")
+    task.add_parser("list", help="list the tasks")
+    task_show = task.add_parser("show", help="print a task file")
+    task_show.add_argument("id")
+
+    run = commands.add_parser("run", help="run a task until the run finishes or parks")
+    run.add_argument("task_id")
+
+    resume = commands.add_parser("resume", help="continue parked runs whose approvals are decided")
+    resume.add_argument("run_id", nargs="?")
+    resume.add_argument("--all", action="store_true", help="every unfinished run, oldest first")
+
+    status = commands.add_parser("status", help="state, current step, iteration and cost")
+    status.add_argument("run_id", nargs="?")
 
     commands.add_parser("reindex", help="rebuild the index and verify finished run folders")
 
@@ -66,6 +135,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--context",
         action="store_true",
         help="per step: files provided, files read, tokens by source",
+    )
+    inspect.add_argument(
+        "--transcript", action="store_true", help="per agent step: the conversation"
+    )
+
+    commands.add_parser(
+        "selfcheck", help="run a complete scripted flow on a fixture repository, offline"
     )
     return parser
 
@@ -137,6 +213,12 @@ def _deny(args: argparse.Namespace) -> int:
 
 def _inspect(args: argparse.Namespace) -> int:
     home = resolve_home(args)
+    if args.transcript:
+        for transcript in app_inspect.transcripts(home, args.run_id, args.step):
+            print(f"== {transcript.step} ==")
+            for message in transcript.messages:
+                _print_message(message)
+        return 0
     if not args.context:
         print(f"Run {args.run_id}: steps")
         for folder in app_inspect.list_steps(home, args.run_id):
@@ -160,8 +242,154 @@ def _inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_message(message: Message) -> None:
+    print(f"{message.role}:")
+    for block in message.content:
+        if block.type == "text":
+            print(f"  [text] {block.text}")
+        elif block.type == "tool_use":
+            print(f"  [tool_use {block.name}] {json.dumps(block.input, sort_keys=True)}")
+        else:
+            mark = " error" if block.is_error else ""
+            print(f"  [tool_result{mark}] {block.content}")
+
+
+def _project(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    project = app_projects.add_project(home, args.name, Path(args.repo), protected=args.protected)
+    print(f"Added project {args.name} at {project.repo}")
+    print(f"Configure its gates in projects/{args.name}/project.yaml (docs/SPEC.md section 11).")
+    return 0
+
+
+def _task(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    if args.task_command == "list":
+        return _task_list(home)
+    if args.task_command == "show":
+        print(app_tasks.find_task(home, args.id).path.read_text(encoding="utf-8"), end="")
+        return 0
+    fields = (args.title, args.project, args.goal, args.criterion)
+    if args.file is not None:
+        if any(fields):
+            return _usage("task new takes --file or the fields of a task, not both")
+        entry = asyncio.run(app_tasks.add_task_file(home, Path(args.file)))
+    else:
+        if not all(fields):
+            return _usage("task new needs --title, --project, --goal and --criterion, or --file")
+        entry = asyncio.run(
+            app_tasks.new_task(
+                home,
+                title=args.title,
+                project=args.project,
+                goal=args.goal,
+                criteria=args.criterion,
+                priority=args.priority,
+                plan_approval=args.plan_approval,
+                lane=args.lane,
+                max_iterations=args.max_iterations,
+                max_cost_usd=args.max_cost,
+            )
+        )
+    print(f"Created {entry.task.id}: {entry.relative(home)}")
+    return 0
+
+
+def _task_list(home: Home) -> int:
+    entries = app_tasks.list_tasks(home)
+    broken = app_tasks.broken_task_files(home)
+    if not entries and not broken:
+        print("No tasks.")
+    for entry in entries:
+        task = entry.task
+        print(f"{task.id}  {task.status}  p{task.priority}  {task.project}  {task.title}")
+    for problem in broken:
+        print(f"cplane: not a task: {problem}", file=sys.stderr)
+    return 1 if broken else 0
+
+
+def _usage(message: str) -> int:
+    print(f"cplane: {message}", file=sys.stderr)
+    return USAGE_ERROR
+
+
+def _report(outcome: RunOutcome) -> None:
+    print(
+        f"Run {outcome.run_id} of {outcome.task_id}: {outcome.status} at {outcome.step}: "
+        f"{outcome.message}"
+    )
+    if outcome.status == "parked" and outcome.approval_id:
+        entry = outcome.approval_id
+        print(
+            f"Decide it with `cplane approve {entry}` or `cplane deny {entry} --reason ...`, "
+            f"then `cplane resume {outcome.run_id}`."
+        )
+
+
+def _run(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    outcome = asyncio.run(app_runs.run_task(home, args.task_id, clients=make_clients(os.environ)))
+    _report(outcome)
+    return 1 if outcome.status == "failed" else 0
+
+
+def _resume(args: argparse.Namespace) -> int:
+    if (args.run_id is None) == (not args.all):
+        return _usage("resume takes a run id or --all, not both and not neither")
+    home = resolve_home(args)
+    clients = make_clients(os.environ)
+    if args.run_id is not None:
+        outcome = asyncio.run(app_runs.resume_run(home, args.run_id, clients=clients))
+        _report(outcome)
+        return 1 if outcome.status == "failed" else 0
+    results = asyncio.run(app_runs.resume_runs(home, clients=clients))
+    if not results:
+        print("No unfinished runs.")
+    code = 0
+    for result in results:
+        if result.outcome is None:
+            print(f"cplane: could not resume {result.run_id}: {result.error}", file=sys.stderr)
+            code = 1
+            continue
+        _report(result.outcome)
+        if result.outcome.status == "failed":
+            code = 1
+    return code
+
+
+def _status(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    statuses = app_status.run_statuses(home, args.run_id)
+    if not statuses:
+        print("No runs.")
+    for status in statuses:
+        limit = f"/{status.max_iterations}" if status.max_iterations else ""
+        line = (
+            f"{status.run_id}  {status.task_id or '-'}  {status.state}  {status.step or '-'}  "
+            f"iteration {status.iteration}{limit}  ${status.cost_usd:.4f}"
+        )
+        if status.approval_id:
+            line += f"  waiting for {status.approval_id}"
+        print(line)
+    return 0
+
+
+def _selfcheck(args: argparse.Namespace) -> int:
+    report = asyncio.run(app_selfcheck.run_selfcheck())
+    for check in report.checks:
+        print(f"{'ok' if check.ok else 'FAIL':<5} {check.name}: {check.detail}")
+    print("selfcheck passed" if report.ok else "selfcheck FAILED")
+    return 0 if report.ok else 1
+
+
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "init": _init,
+    "project": _project,
+    "task": _task,
+    "run": _run,
+    "resume": _resume,
+    "status": _status,
+    "selfcheck": _selfcheck,
     "reindex": _reindex,
     "approvals": _approvals,
     "approve": _approve,
