@@ -1,7 +1,8 @@
 """File primitives of the store (SPEC.md section 5).
 
-JSON files are written to a temporary name in the same directory and renamed into place,
-so a reader never sees a half-written file and a crash leaves no partial file behind.
+Whole-file writes, JSON among them, go to a temporary name in the same directory and are
+renamed into place, so a reader never sees a half-written file and a crash leaves no partial
+file behind.
 JSONL files are append-only: one record per line, never rewritten.
 """
 
@@ -16,18 +17,28 @@ from control_plane.domain.base import DomainModel
 
 
 def write_json_atomic(path: Path, data: DomainModel | Mapping[str, Any]) -> None:
-    """Write `data` as the content of a `.json` file, atomically.
+    """Write `data` as the content of a `.json` file, atomically (see `write_text_atomic`)."""
+    text = data.to_json() if isinstance(data, DomainModel) else json.dumps(data, indent=2) + "\n"
+    write_text_atomic(path, text)
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write `text`, encoded as UTF-8, as the whole content of `path` (see `write_bytes_atomic`)."""
+    write_bytes_atomic(path, text.encode("utf-8"))
+
+
+def write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Write `data` as the whole content of `path`, atomically.
 
     On failure the target is untouched (it keeps its previous content if it existed) and the
     temporary file is removed.
     """
-    text = data.to_json() if isinstance(data, DomainModel) else json.dumps(data, indent=2) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)

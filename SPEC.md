@@ -443,7 +443,9 @@ The project repository exists in three checkouts.
 
 The engine always runs from the control checkout. It modifies a run worktree, never the code it is executing. A merged change does not affect the running system until it is adopted.
 
-`merge_and_verify` merges the run branch into `main` and runs the full test suite on `main`. If the suite is red, it reverts the merge commit and the run fails with the test output saved.
+`merge_and_verify` merges the run branch into `main` with a merge commit and runs the full test suite on `main`. If the suite is red, it resets `main` to the pre-merge commit and the run fails with the test output saved. It resets rather than adding a revert commit: `main` ends exactly where it was, and the run branch can still be merged later, which a reverted merge would prevent because git would treat its commits as already merged. A merge that conflicts or cannot be made is abandoned and leaves `main` untouched. The action refuses, changing nothing, when the worktree has uncommitted changes, when the branch has nothing new, or when the primary checkout is not on `main` or has local changes to tracked files. The engine's git commands in a project run with its hooks switched off, so a commit or a merge never executes code from the repository.
+
+`diff.patch` is every change in the run worktree against the recorded base commit: committed and uncommitted, untracked files included, ignored files excluded. It is a binary-safe patch with fixed options, so it applies to the base commit with `git apply` whatever the user's git configuration.
 
 `cplane self-update` adopts a new version. It runs `cplane selfcheck` from `main`, which executes a complete scripted flow against a fixture repository with no network. If that passes, it moves the tag `last-known-good` and the control checkout to the new commit. If it fails, the control checkout stays where it is. Rolling back is moving the tag to the previous commit.
 

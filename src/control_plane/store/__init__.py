@@ -1,6 +1,12 @@
 """Run folders, home repository, index."""
 
-from control_plane.store.files import append_jsonl, read_jsonl, write_json_atomic
+from control_plane.store.files import (
+    append_jsonl,
+    read_jsonl,
+    write_bytes_atomic,
+    write_json_atomic,
+    write_text_atomic,
+)
 from control_plane.store.git import Git, GitError
 from control_plane.store.home import Home, HomeExistsError, HomeNotFoundError, create_home
 from control_plane.store.index import SCHEMA_VERSION, TABLE_NAMES, Index
@@ -29,5 +35,7 @@ __all__ = [
     "create_home",
     "new_run_id",
     "read_jsonl",
+    "write_bytes_atomic",
     "write_json_atomic",
+    "write_text_atomic",
 ]

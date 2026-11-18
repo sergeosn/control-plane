@@ -8,7 +8,13 @@ import pytest
 
 from control_plane.domain import Event
 from control_plane.store import files
-from control_plane.store.files import append_jsonl, read_jsonl, write_json_atomic
+from control_plane.store.files import (
+    append_jsonl,
+    read_jsonl,
+    write_bytes_atomic,
+    write_json_atomic,
+    write_text_atomic,
+)
 
 TS = datetime(2026, 11, 17, 9, 0, tzinfo=UTC)
 
@@ -40,6 +46,23 @@ def test_write_json_atomic_replaces_an_existing_file(tmp_path: Path) -> None:
 
     assert json.loads(target.read_text()) == {"n": 2}
     assert [p.name for p in tmp_path.iterdir()] == ["state.json"]
+
+
+def test_write_text_atomic_writes_utf8_and_leaves_no_temporary_file(tmp_path: Path) -> None:
+    target = tmp_path / "run" / "diff.patch"
+
+    write_text_atomic(target, "caf\u00e9\n")
+
+    assert target.read_bytes() == "caf\u00e9\n".encode()
+    assert [p.name for p in target.parent.iterdir()] == ["diff.patch"]
+
+
+def test_write_bytes_atomic_writes_the_bytes_exactly(tmp_path: Path) -> None:
+    target = tmp_path / "blob.bin"
+
+    write_bytes_atomic(target, bytes(range(256)))
+
+    assert target.read_bytes() == bytes(range(256))
 
 
 def test_failure_between_temporary_write_and_rename_leaves_no_partial_file(
