@@ -4,6 +4,7 @@ The end-to-end test (`tests/integration/test_end_to_end.py`) drives them all in 
 these tests cover each command's options, output and exit codes on its own.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -189,6 +190,24 @@ async def test_status_and_inspect_transcript(
     assert await _main(scenario.home, "status") == 0
     line = capsys.readouterr().out
     assert run_id in line and "parked" in line and "merge_gate" in line and "iteration 2/3" in line
+
+    assert await _main(scenario.home, "status", "--json") == 0
+    records = [json.loads(output) for output in capsys.readouterr().out.splitlines()]
+    assert len(records) == 1
+    assert records[0].keys() == {
+        "id",
+        "task",
+        "state",
+        "current_step",
+        "iteration",
+        "cost",
+    }
+    assert records[0]["id"] == run_id
+    assert records[0]["task"] == scenario.task_id
+    assert records[0]["state"] == "parked"
+    assert records[0]["current_step"] == "merge_gate"
+    assert records[0]["iteration"] == 2
+    assert records[0]["cost"] > 0
 
     assert await _main(scenario.home, "status", run_id) == 0
     assert run_id in capsys.readouterr().out
