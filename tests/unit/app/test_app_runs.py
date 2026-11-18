@@ -48,6 +48,7 @@ async def test_a_run_goes_through_a_failed_gate_and_parks_at_the_merge_approval(
     assert (outcome.status, outcome.step) == ("parked", "merge_gate")
     [approval] = app_approvals.list_queue(scenario.home)
     assert approval.type == "merge" and approval.id == outcome.approval_id
+    assert outcome.approval_type == "merge"
     run = RunStore(scenario.home).open(outcome.run_id)
     state = read_flow_state(run)
     assert state.iteration == 2

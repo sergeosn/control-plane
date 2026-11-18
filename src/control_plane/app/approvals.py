@@ -1,4 +1,9 @@
-"""The approval queue behind `cplane approvals`, `approve` and `deny` (docs/SPEC.md section 12).
+"""The approval queue behind `cplane approvals`, `approve`, `deny` and `answer` (docs/SPEC.md
+section 12).
+
+`approve` and `deny` send the positive and the negative answer of the entry's type: `approve`
+and `deny` for `plan`, `tool_call` and `merge`, `extend` and `end` for `budget`. A `question`
+takes free text through `answer` instead.
 
 There is one queue, and it is the union of every run's `approvals.jsonl`: an entry is raised
 as one line and decided as a second line with the same id, so the latest line of an id is
@@ -12,7 +17,7 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
-from control_plane.domain import Approval
+from control_plane.domain import Approval, ApprovalType
 from control_plane.store.home import Home
 from control_plane.store.index import Index
 from control_plane.store.runs import RunStore
@@ -96,16 +101,64 @@ async def decide(
     return decided
 
 
+POSITIVE: dict[ApprovalType, str] = {
+    "plan": "approve",
+    "tool_call": "approve",
+    "merge": "approve",
+    "budget": "extend",
+}
+"""What `approve` sends, per type."""
+
+NEGATIVE: dict[ApprovalType, str] = {
+    "plan": "deny",
+    "tool_call": "deny",
+    "merge": "deny",
+    "budget": "end",
+}
+"""What `deny` sends, per type; its reason is kept as the note."""
+
+
+def _decision_entry(home: Home, approval_id: str) -> Approval:
+    approval = find_approval(home, approval_id)
+    if approval.type == "question":
+        raise ApprovalError(
+            f"approval {approval_id} is a question; answer it with "
+            f'`cplane answer {approval_id} "..."`'
+        )
+    return approval
+
+
 async def approve(
     home: Home, approval_id: str, *, note: str | None = None, clock: Clock = _wall_clock
 ) -> Approval:
-    return await decide(home, approval_id, "approve", note=note, clock=clock)
+    """Send the positive answer of the entry's type: `approve`, or `extend` for a budget."""
+    approval = _decision_entry(home, approval_id)
+    return await decide(home, approval_id, POSITIVE[approval.type], note=note, clock=clock)
 
 
 async def deny(
     home: Home, approval_id: str, *, reason: str, clock: Clock = _wall_clock
 ) -> Approval:
-    return await decide(home, approval_id, "deny", note=reason, clock=clock)
+    """Send the negative answer of the entry's type: `deny`, or `end` for a budget."""
+    approval = _decision_entry(home, approval_id)
+    if not reason.strip():
+        raise ApprovalError(f"approval {approval_id}: a deny needs its reason")
+    return await decide(home, approval_id, NEGATIVE[approval.type], note=reason, clock=clock)
+
+
+async def answer(
+    home: Home, approval_id: str, text: str, *, clock: Clock = _wall_clock
+) -> Approval:
+    """Record `text` as the answer to a `question` entry."""
+    approval = find_approval(home, approval_id)
+    if approval.type != "question":
+        raise ApprovalError(
+            f"approval {approval_id} is a {approval.type} entry, not a question; decide it "
+            f"with `cplane approve {approval_id}` or `cplane deny {approval_id} --reason ...`"
+        )
+    if not text.strip():
+        raise ApprovalError(f"approval {approval_id}: an answer needs text")
+    return await decide(home, approval_id, text, clock=clock)
 
 
 async def _mirror(index: Index, run_id: str) -> None:

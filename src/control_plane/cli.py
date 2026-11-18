@@ -34,7 +34,7 @@ from control_plane.app.runs import RunOutcome
 from control_plane.app.selfupdate import SelfUpdateError
 from control_plane.app.status import StatusError
 from control_plane.app.tasks import TaskError
-from control_plane.domain import Approval
+from control_plane.domain import Approval, ApprovalType
 from control_plane.flow import FlowError
 from control_plane.llm import CredentialsError
 from control_plane.llm.openai_compat import AUTH_TOKEN_VAR
@@ -128,13 +128,19 @@ def build_parser() -> argparse.ArgumentParser:
     approvals = commands.add_parser("approvals", help="list the approval queue")
     approvals.add_argument("--all", action="store_true", help="include decided entries")
 
-    approve = commands.add_parser("approve", help="approve an entry of the queue")
+    approve = commands.add_parser(
+        "approve", help="approve an entry of the queue (extend, for a budget)"
+    )
     approve.add_argument("id", help="the approval id, as `cplane approvals` lists it")
     approve.add_argument("--note", help="an optional note kept with the decision")
 
-    deny = commands.add_parser("deny", help="deny an entry of the queue")
+    deny = commands.add_parser("deny", help="deny an entry of the queue (end, for a budget)")
     deny.add_argument("id", help="the approval id, as `cplane approvals` lists it")
     deny.add_argument("--reason", required=True, help="why; the model sees this as its error")
+
+    answer = commands.add_parser("answer", help="answer a question entry of the queue")
+    answer.add_argument("id", help="the approval id, as `cplane approvals` lists it")
+    answer.add_argument("text", help="the answer, given to the planner")
 
     inspect = commands.add_parser("inspect", help="show what happened in a run and why")
     inspect.add_argument("run_id", help="the run to inspect")
@@ -220,14 +226,23 @@ def _approvals(args: argparse.Namespace) -> int:
 def _approve(args: argparse.Namespace) -> int:
     home = resolve_home(args)
     decided = asyncio.run(app_approvals.approve(home, args.id, note=args.note))
-    print(f"Approved {decided.id} (run {decided.run_id}).")
+    done = "Extended the budget for" if decided.answer == "extend" else "Approved"
+    print(f"{done} {decided.id} (run {decided.run_id}).")
     return 0
 
 
 def _deny(args: argparse.Namespace) -> int:
     home = resolve_home(args)
     decided = asyncio.run(app_approvals.deny(home, args.id, reason=args.reason))
-    print(f"Denied {decided.id} (run {decided.run_id}): {decided.note}")
+    done = "Ended" if decided.answer == "end" else "Denied"
+    print(f"{done} {decided.id} (run {decided.run_id}): {decided.note}")
+    return 0
+
+
+def _answer(args: argparse.Namespace) -> int:
+    home = resolve_home(args)
+    decided = asyncio.run(app_approvals.answer(home, args.id, args.text))
+    print(f"Answered {decided.id} (run {decided.run_id}).")
     return 0
 
 
@@ -358,11 +373,20 @@ def _report(outcome: RunOutcome) -> None:
         f"{outcome.message}"
     )
     if outcome.status == "parked" and outcome.approval_id:
-        entry = outcome.approval_id
         print(
-            f"Decide it with `cplane approve {entry}` or `cplane deny {entry} --reason ...`, "
-            f"then `cplane resume {outcome.run_id}`."
+            f"{_decide_hint(outcome.approval_id, outcome.approval_type)}, then "
+            f"`cplane resume {outcome.run_id}`."
         )
+
+
+def _decide_hint(entry: str, kind: ApprovalType | None) -> str:
+    """How to decide a parked run's entry, with the command its type takes."""
+    approve, deny = f"`cplane approve {entry}`", f"`cplane deny {entry} --reason ...`"
+    if kind == "question":
+        return f'Answer it with `cplane answer {entry} "..."`'
+    if kind == "budget":
+        return f"Extend the budget with {approve} or end the run with {deny}"
+    return f"Decide it with {approve} or {deny}"
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -470,6 +494,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "approvals": _approvals,
     "approve": _approve,
     "deny": _deny,
+    "answer": _answer,
     "inspect": _inspect,
 }
 

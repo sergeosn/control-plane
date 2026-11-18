@@ -167,16 +167,46 @@ async def test_an_unknown_id_cannot_be_decided(home: Home, clock: Clock) -> None
         await app.approve(home, "A-0001-01", clock=clock)
 
 
-async def test_approve_on_a_type_that_takes_other_answers_is_rejected(
+async def test_approve_and_deny_send_extend_and_end_for_a_budget(
     home: Home, store: RunStore, clock: Clock
 ) -> None:
     run = store.create("R-0001")
-    original = entry(run, 1, type_="budget")
+    extended, ended = entry(run, 1, type_="budget"), entry(run, 2, type_="budget")
 
-    with pytest.raises(app.ApprovalError, match="budget"):
+    assert (await app.approve(home, extended.id, clock=clock)).answer == "extend"
+    decided = await app.deny(home, ended.id, reason="too costly", clock=clock)
+    assert (decided.answer, decided.note) == ("end", "too costly")
+
+
+async def test_approve_of_a_question_is_rejected_and_names_answer(
+    home: Home, store: RunStore, clock: Clock
+) -> None:
+    run = store.create("R-0001")
+    original = entry(run, 1, type_="question")
+
+    with pytest.raises(app.ApprovalError, match="cplane answer"):
         await app.approve(home, original.id, clock=clock)
+    with pytest.raises(app.ApprovalError, match="cplane answer"):
+        await app.deny(home, original.id, reason="no", clock=clock)
 
     assert run.approvals() == [original]
+
+
+async def test_answer_records_text_on_a_question_only(
+    home: Home, store: RunStore, clock: Clock
+) -> None:
+    run = store.create("R-0001")
+    question, call = entry(run, 1, type_="question"), entry(run, 2)
+
+    assert (await app.answer(home, question.id, "Use --json.", clock=clock)).answer == (
+        "Use --json."
+    )
+    with pytest.raises(app.ApprovalError, match="tool_call"):
+        await app.answer(home, call.id, "approve", clock=clock)
+    with pytest.raises(app.ApprovalError, match="answer"):
+        await app.answer(home, question.id, "", clock=clock)
+
+    assert len(run.approvals()) == 3
 
 
 async def test_decide_takes_any_answer_a_question_accepts(

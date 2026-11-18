@@ -1,13 +1,16 @@
-"""Task 9: `cplane approvals`, `cplane approve` and `cplane deny` (docs/SPEC.md sections 12
-and 14)."""
+"""Task 9: `cplane approvals`, `cplane approve`, `cplane deny` and `cplane answer` (docs/SPEC.md
+sections 12 and 14)."""
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from control_plane import cli
+from control_plane.app.runs import RunOutcome
 from control_plane.cli import main
 from control_plane.domain import Approval
+from control_plane.domain.approval import ApprovalType
 from control_plane.store.home import Home, create_home
 from control_plane.store.runs import RunFolder, RunStore
 
@@ -19,13 +22,19 @@ def home(tmp_path: Path) -> Home:
     return create_home(tmp_path / "home")
 
 
-def park(home: Home, run_id: str = "R-0001", number: int = 1, at: datetime = T0) -> Approval:
+def park(
+    home: Home,
+    run_id: str = "R-0001",
+    number: int = 1,
+    at: datetime = T0,
+    type_: ApprovalType = "tool_call",
+) -> Approval:
     store = RunStore(home)
     run = store.open(run_id) if (home.runs / run_id).is_dir() else store.create(run_id)
     approval = Approval(
         id=f"A-{run_id[2:]}-{number:02d}",
         run_id=run_id,
-        type="tool_call",
+        type=type_,
         asked="worker wants to call run_command with git push: parked for approval",
         evidence=["steps/02-implement-1/transcript.jsonl"],
         created_at=at,
@@ -155,27 +164,173 @@ def test_deciding_twice_fails_with_a_message(
     assert len(lines(RunStore(home).open("R-0001"))) == 2
 
 
-def test_the_wrong_decision_for_a_type_fails_with_a_message(
+# --- the answer each type takes ------------------------------------------------------
+
+
+@pytest.mark.parametrize("type_", ["plan", "tool_call", "merge"])
+def test_approve_sends_approve_for_plan_tool_call_and_merge(
+    home: Home, capsys: pytest.CaptureFixture[str], type_: ApprovalType
+) -> None:
+    park(home, type_=type_)
+
+    assert main(["--home", str(home.path), "approve", "A-0001-01"]) == 0
+
+    assert capsys.readouterr().out == "Approved A-0001-01 (run R-0001).\n"
+    assert lines(RunStore(home).open("R-0001"))[-1].answer == "approve"
+
+
+@pytest.mark.parametrize("type_", ["plan", "tool_call", "merge"])
+def test_deny_sends_deny_for_plan_tool_call_and_merge(
+    home: Home, capsys: pytest.CaptureFixture[str], type_: ApprovalType
+) -> None:
+    park(home, type_=type_)
+
+    assert main(["--home", str(home.path), "deny", "A-0001-01", "--reason", "No."]) == 0
+
+    assert capsys.readouterr().out == "Denied A-0001-01 (run R-0001): No.\n"
+    decided = lines(RunStore(home).open("R-0001"))[-1]
+    assert (decided.answer, decided.note) == ("deny", "No.")
+
+
+def test_approve_extends_a_budget(home: Home, capsys: pytest.CaptureFixture[str]) -> None:
+    park(home, type_="budget")
+
+    code = main(["--home", str(home.path), "approve", "A-0001-01", "--note", "one more"])
+
+    assert code == 0
+    assert capsys.readouterr().out == "Extended the budget for A-0001-01 (run R-0001).\n"
+    decided = lines(RunStore(home).open("R-0001"))[-1]
+    assert (decided.answer, decided.note) == ("extend", "one more")
+
+
+def test_deny_ends_a_budget(home: Home, capsys: pytest.CaptureFixture[str]) -> None:
+    park(home, type_="budget")
+
+    code = main(["--home", str(home.path), "deny", "A-0001-01", "--reason", "Too costly."])
+
+    assert code == 0
+    assert capsys.readouterr().out == "Ended A-0001-01 (run R-0001): Too costly.\n"
+    decided = lines(RunStore(home).open("R-0001"))[-1]
+    assert (decided.answer, decided.note) == ("end", "Too costly.")
+
+
+def test_deny_of_a_budget_still_needs_a_reason(
     home: Home, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run = RunStore(home).create("R-0001")
-    run.append_approval(
-        Approval(
-            id="A-0001-01",
-            run_id="R-0001",
-            type="budget",
-            asked="The step budget is exhausted.",
-            evidence=[],
-            created_at=T0,
-        )
-    )
+    park(home, type_="budget")
 
-    code = main(["--home", str(home.path), "approve", "A-0001-01"])
+    code = main(["--home", str(home.path), "deny", "A-0001-01", "--reason", " "])
+
+    assert code == 1
+    assert "reason" in capsys.readouterr().err
+    assert len(lines(RunStore(home).open("R-0001"))) == 1
+
+
+def test_answer_records_the_text_for_a_question(
+    home: Home, capsys: pytest.CaptureFixture[str]
+) -> None:
+    park(home, type_="question")
+
+    code = main(["--home", str(home.path), "answer", "A-0001-01", "Keep the old flag too."])
+
+    assert code == 0
+    assert capsys.readouterr().out == "Answered A-0001-01 (run R-0001).\n"
+    decided = lines(RunStore(home).open("R-0001"))[-1]
+    assert decided.answer == "Keep the old flag too." and decided.note is None
+
+
+def test_answer_needs_text(home: Home, capsys: pytest.CaptureFixture[str]) -> None:
+    park(home, type_="question")
+
+    code = main(["--home", str(home.path), "answer", "A-0001-01", "  "])
+
+    assert code == 1
+    assert "answer" in capsys.readouterr().err
+    assert len(lines(RunStore(home).open("R-0001"))) == 1
+
+
+@pytest.mark.parametrize("command", [["approve"], ["deny", "--reason", "no"]])
+def test_approve_or_deny_of_a_question_points_to_answer(
+    home: Home, capsys: pytest.CaptureFixture[str], command: list[str]
+) -> None:
+    park(home, type_="question")
+
+    code = main(["--home", str(home.path), command[0], "A-0001-01", *command[1:]])
 
     assert code == 1
     err = capsys.readouterr().err
-    assert err.startswith("cplane: ") and "budget" in err
-    assert len(lines(run)) == 1
+    assert err.startswith("cplane: ") and "question" in err
+    assert 'cplane answer A-0001-01 "..."' in err
+    assert len(lines(RunStore(home).open("R-0001"))) == 1
+
+
+@pytest.mark.parametrize("type_", ["plan", "tool_call", "merge", "budget"])
+def test_answer_of_a_decision_entry_points_to_approve_and_deny(
+    home: Home, capsys: pytest.CaptureFixture[str], type_: ApprovalType
+) -> None:
+    park(home, type_=type_)
+
+    code = main(["--home", str(home.path), "answer", "A-0001-01", "approve"])
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("cplane: ") and type_ in err
+    assert "cplane approve A-0001-01" in err and "cplane deny A-0001-01" in err
+    assert len(lines(RunStore(home).open("R-0001"))) == 1
+
+
+def test_answer_of_an_unknown_id_fails_with_a_message(
+    home: Home, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--home", str(home.path), "answer", "A-0001-09", "text"]) == 1
+    assert capsys.readouterr().err == "cplane: no approval A-0001-09 in the queue\n"
+
+
+# --- the hint printed when a run parks ------------------------------------------------
+
+
+def _parked(type_: ApprovalType | None) -> RunOutcome:
+    return RunOutcome(
+        run_id="R-0001",
+        task_id="T-0001",
+        status="parked",
+        step="somewhere",
+        message="waiting",
+        approval_id="A-0001-01",
+        approval_type=type_,
+    )
+
+
+@pytest.mark.parametrize("type_", ["plan", "tool_call", "merge"])
+def test_the_park_hint_names_approve_and_deny(
+    capsys: pytest.CaptureFixture[str], type_: ApprovalType
+) -> None:
+    cli._report(_parked(type_))
+
+    hint = capsys.readouterr().out.splitlines()[-1]
+    assert hint == (
+        "Decide it with `cplane approve A-0001-01` or "
+        "`cplane deny A-0001-01 --reason ...`, then `cplane resume R-0001`."
+    )
+
+
+def test_the_park_hint_for_a_budget_says_what_approve_and_deny_do(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli._report(_parked("budget"))
+
+    hint = capsys.readouterr().out.splitlines()[-1]
+    assert hint == (
+        "Extend the budget with `cplane approve A-0001-01` or end the run with "
+        "`cplane deny A-0001-01 --reason ...`, then `cplane resume R-0001`."
+    )
+
+
+def test_the_park_hint_for_a_question_names_answer(capsys: pytest.CaptureFixture[str]) -> None:
+    cli._report(_parked("question"))
+
+    hint = capsys.readouterr().out.splitlines()[-1]
+    assert hint == 'Answer it with `cplane answer A-0001-01 "..."`, then `cplane resume R-0001`.'
 
 
 def test_approvals_without_a_home_fails_with_a_message(

@@ -524,7 +524,8 @@ The index is SQLite, accessed through SQLAlchemy 2.0 with the async engine. Tabl
 | `cplane run <task-id>` | Runs in the foreground until the run finishes or parks |
 | `cplane resume [<run-id>] [--all]` | Continues parked runs whose approvals are decided |
 | `cplane approvals` | Lists the queue |
-| `cplane approve <id> [--note]`, `cplane deny <id> --reason` | Decides an entry |
+| `cplane approve <id> [--note]`, `cplane deny <id> --reason` | Decides a `plan`, `tool_call`, `merge` or `budget` entry |
+| `cplane answer <id> "<text>"` | Answers a `question` entry |
 | `cplane status [<run-id>]` | Shows state, current step, iteration, cost |
 | `cplane inspect <run-id> [--step] [--context] [--transcript]` | Shows what happened and why |
 | `cplane reindex` | Rebuilds the index and verifies finished run folders; exits non-zero when a finished run folder differs from its commit or a file could not be indexed |
@@ -538,6 +539,8 @@ Details the commands fix:
 - `run` starts a task whose status is `backlog` or `failed`. It reads `plane.yaml`, the project, the lane and the rules, and builds a model client per role, before it writes anything, so a missing credential leaves no run folder behind. The task file's `status` follows the run: `running` when it starts, then `parked`, `done` or `failed`; only that line of the file is rewritten, and the final status is committed on its own. The manifest therefore records the task file as the run saw it, with `status: running`. `run` and `resume` exit non-zero when the run failed and zero when it parked or finished.
 - `resume` takes either a run id or `--all`, never both and not neither. `--all` resumes every unfinished run, oldest first; a run that cannot be resumed is named on standard error, the others still run, and the exit code is non-zero.
 - `status` prints one line per run: id, task, state (`created` for a run folder that never started), current step, iteration out of `max_iterations`, cost summed from the steps' `llm_calls.jsonl`, and the undecided approval a parked run waits for. With `--json`, it instead prints one JSON object per run (one object per line) with `id`, `task`, `state`, `current_step`, `iteration`, and `cost`; the default output is unchanged.
+- `approve` sends the positive answer of the entry's type and `deny` the negative one, with its reason as the note: `approve` and `deny` for `plan`, `tool_call` and `merge`, `extend` and `end` for `budget`. `answer` records its text as the answer to a `question`. Each refuses an entry of a type it does not decide and names the command that does: `approve` and `deny` point a question to `answer`, and `answer` points any other entry to `approve` and `deny`. A deny without a reason and an empty answer are refused before anything is written.
+- When `run` or `resume` reports a run parked on an approval, it names the command the entry's type takes: `approve` or `deny` for `plan`, `tool_call` and `merge`; for `budget`, `approve` to extend the budget or `deny` to end the run; `answer` for `question`; then `cplane resume <run-id>`.
 - `inspect --transcript` prints every agent step's transcript, or the steps `--step` names, one block per line.
 
 Every command calls the application layer in `control_plane.app`. No command writes files or the index directly.

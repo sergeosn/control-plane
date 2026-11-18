@@ -36,6 +36,7 @@ from control_plane.app.gates import run_checks
 from control_plane.app.tasks import TaskEntry, TaskError, commit_status, find_task, set_status
 from control_plane.context.builder import BRIEF_FILE
 from control_plane.context.manifest import ManifestError, start_manifest
+from control_plane.domain.approval import ApprovalType
 from control_plane.domain.gates import GateReport
 from control_plane.domain.manifest import RoleModel, RunBudget
 from control_plane.domain.plane import ModelProfile, PlaneConfig
@@ -110,6 +111,8 @@ class RunOutcome:
     step: str
     message: str
     approval_id: str | None = None
+    approval_type: ApprovalType | None = None
+    """The type of the entry `approval_id`, which says how a human decides it."""
     reason: str | None = None
     """Why the run parked without an approval (`rate_limit`, `connection`, `server_error`,
     `auth`); else None."""
@@ -433,9 +436,17 @@ async def _settle(home: Home, entry: TaskEntry, run_id: str, report: FlowReport)
         step=report.step,
         message=report.message,
         approval_id=report.approval_id,
+        approval_type=_approval_type(home, run_id, report.approval_id),
         reason=report.reason,
         resume_after=report.resume_after,
     )
+
+
+def _approval_type(home: Home, run_id: str, entry_id: str | None) -> ApprovalType | None:
+    if entry_id is None:
+        return None
+    types = {a.id: a.type for a in RunStore(home).open(run_id).approvals()}
+    return types.get(entry_id)
 
 
 async def _sync_index(home: Home, run_id: str) -> None:
