@@ -74,6 +74,7 @@ plane-home/                      git repository, private
   tasks/T-NNNN-slug.md
   runs/<run-id>/                 immutable once finished
     manifest.json
+    flow.json                    the flow engine's position, rewritten after every change (section 7)
     context/NN-<step>-<attempt>/ BRIEF.md, INDEX.md and the step's context files
     steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json,
                                  llm_calls.jsonl, tool_calls.jsonl
@@ -209,6 +210,19 @@ stateDiagram-v2
 **What comes back on failure.** A failed gate returns the output of the failing gates. A failed review returns its findings. A denied approval returns the human's reason. The next `implement` attempt receives these as files in its context.
 
 **Validation at load.** Every transition target exists. Every step is reachable from `start`. `done` is reachable. Every `agent` step names a role the lane defines. Every outcome a step kind can emit has a transition. A flow that fails validation is rejected before any run starts.
+
+The outcomes a step can emit are fixed by its kind: an `agent` step by what it `produces` (`plan`: `ok`, `blocked`; `work_report`: `ok`; `review`: `pass`, `fail`); a `gate` step `pass`, `fail`; an `approval` step `answered` for `question` and `approve`, `deny` for `plan` and `merge`; an `action` step `ok`, `error`. Validation also rejects a transition for an outcome the step cannot emit, a role whose artifact differs from `produces`, a `when` that is not `task.<boolean field>`, an unknown gate or action, and a step named `done` or `failed`. The roles a lane defines are the prompts under `roles/`; a lane's `rubric.md` must hold at least one row `- [ID] text`, with unique ids. Steps of type `tool_call` and `budget` do not exist: the engine raises those approvals itself.
+
+**Engine details.** These follow from the rules above and are fixed by the implementation:
+
+- The flow engine hands an agent step to an executor and gets the context, the gates and the actions through ports the application layer provides; a step gets its own executor, because its path jail reads its own context directory. Step folder numbers `NN` count every step the run enters; a skipped step takes none.
+- The iteration counter counts entries into the step that produces `work_report`; the first entry is iteration 1. `max_iterations` comes from the task's `budget`, which overrides the flow's `limits`. An `extend` of a `budget` approval raises it by one.
+- An agent step that fails with `budget_exceeded` parks the run with a `budget` approval; `extend` runs the step again as a new attempt with a fresh step budget, which is not an iteration. Any other step failure fails the run with the step's reason. `end` fails the run.
+- What comes back on failure is given only to the next agent step: the failing gates' output, the failed review, the denial reason, or for the planner the question's answers. The reviewer gets every gate's output of the last gate run and its out-of-plan files.
+- A plan that touches a protected path forces the plan approval, also when a plan entry is a directory that holds a protected path; the protected paths come first in the approval's evidence. The merge approval lists the protected files the change touches first.
+- The run-level `max_cost_usd` and `max_wall_minutes` limits are parsed and validated but not yet enforced; the per-step budgets of section 8.5 are.
+
+**Persistence and resume.** `flow.json` in the run folder holds the current step, the step being run and its phase, the counters, the latest artifact of each kind, what came back on failure and the approval the run waits for. It is rewritten atomically after every change, and a step is marked `started` before it runs, so a run resumes from inside any step kind: a finished agent step is read back from its folder, a started one is resumed by the executor and one that never wrote `state.json` is run; a gate step uses results already on disk, and a gate folder without results gets the next number; an approval step decides by the latest line of its entry; an action that started and did not finish is not run again, it emits `error` because its effect is unknown. A resume while the approval is undecided writes nothing and reports the run as still parked. When the run reaches `done` or `failed`, `result.json` records the state, the reason and the iteration count, and the run folder is committed.
 
 ## 8. Roles and the agent loop
 
