@@ -14,7 +14,12 @@ from typing import Any
 
 from control_plane.domain import Approval, Event
 from control_plane.domain.base import DomainModel
-from control_plane.store.files import append_jsonl, read_jsonl, write_json_atomic
+from control_plane.store.files import (
+    append_jsonl,
+    read_jsonl,
+    write_bytes_atomic,
+    write_json_atomic,
+)
 from control_plane.store.git import Git
 from control_plane.store.home import Home
 
@@ -83,6 +88,10 @@ class RunFolder:
 
     def write_json(self, relative: str, data: DomainModel | Mapping[str, Any]) -> None:
         write_json_atomic(self._target(relative), data)
+
+    def write_bytes(self, relative: str, data: bytes) -> None:
+        """Write a whole file, byte for byte, atomically: a context file or a patch."""
+        write_bytes_atomic(self._target(relative), data)
 
     def append_jsonl(self, relative: str, record: DomainModel | str) -> None:
         append_jsonl(self._target(relative), record)

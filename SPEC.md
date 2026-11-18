@@ -74,7 +74,7 @@ plane-home/                      git repository, private
   tasks/T-NNNN-slug.md
   runs/<run-id>/                 immutable once finished
     manifest.json
-    context/BRIEF.md  INDEX.md  ...
+    context/NN-<step>-<attempt>/ BRIEF.md, INDEX.md and the step's context files
     steps/NN-<step>-<attempt>/   transcript.jsonl, state.json, artifact.json, usage.json,
                                  llm_calls.jsonl, tool_calls.jsonl
     gates/<attempt>/             one output file per gate
@@ -293,15 +293,17 @@ A transcript record is one message part: a response is one record, and each `too
 
 The prompt carries a short brief. Everything else is a file the agent reads when it needs it.
 
-**`BRIEF.md`** is the first user message and stays under roughly 1,500 tokens. It states the role and what it must produce, the task goal and acceptance criteria, the few hard rules that apply to this role, where the index is, and how to finish.
+**`BRIEF.md`** is the first user message and stays under roughly 1,500 tokens. It states the role and what it must produce, the task goal and acceptance criteria, the few hard rules that apply to this role, where the index is, and how to finish. The engine has no tokenizer, so the budget is checked at four characters per token. A task too long for the budget is cut at a line boundary, and the brief says how much was cut and points at `task.md`.
 
 **`INDEX.md`** lists every file available to the step, one line each: path, what it contains, length in lines. The agent opens files with `read_file`.
 
+Each step has its own context directory, `context/NN-<step>-<attempt>/` in the run folder, named like its step folder. The flow engine gives the step's path jail that directory as its only read-only extra root, so a step reads its own context and nothing else of the run folder. Because the jail takes a relative path from the worktree, the index lists context files by absolute path; repository files are read with worktree-relative paths, as the repo map gives them. A context directory is written once; a new attempt gets a new one.
+
 | Role | Always indexed | Step-specific files |
 |---|---|---|
-| planner | knowledge, lane procedure, repo map | when re-planning: the previous plan and the denial reason or the answers |
-| worker | knowledge, lane procedure, rubric, repo map | `plan.json`; on iteration: gate output, review findings, the previous work report, a denial reason |
-| reviewer | knowledge, rubric, repo map | `plan.json`, `diff.patch`, gate results, the work report marked as unverified claims |
+| planner | task file, knowledge, lane procedure, repo map | when re-planning: the previous plan and the denial reason or the answers |
+| worker | task file, knowledge, lane procedure, rubric, repo map | `plan.json`; on iteration: gate output, review findings, the previous work report, a denial reason |
+| reviewer | task file, knowledge, rubric, repo map | `plan.json`, `diff.patch`, gate results, the work report marked as unverified claims |
 
 Design decisions, each with its cost:
 
@@ -310,11 +312,11 @@ Design decisions, each with its cost:
 - **The system prompt is the role prompt and nothing else.** It is identical across runs of the same lane, which makes it a stable prefix for prompt caching (Task 18).
 - **Truncation is always announced.** `read_file` returns numbered lines, at most 400 per call, and accepts a range. `search` caps its matches. Command output keeps the head and the tail. Each truncated result says how much was dropped, so the model narrows the request and does not assume it saw everything.
 
-The **repo map** is generated per run: the tree of tracked files with line counts and, for Python files, top-level classes and functions taken from the `ast` module. Deep directories are collapsed to keep it bounded.
+The **repo map** is generated per run: the tree of tracked files with line counts and, for Python files, top-level classes and functions taken from the `ast` module. Deep directories are collapsed to keep it bounded: at most 400 lines, so one `read_file` call shows all of it. Directories below the deepest depth that fits become one line each with their file and line counts; a tree that does not fit even then is cut. Both are announced in the map. Knowledge files under `archive/` are not indexed.
 
-**`manifest.json`** records what the run was given: the task file hash, the project base commit, the engine commit, hashes of the flow, rubric, role prompts and rules, the model id and parameters per role, the budgets, and every context file with its SHA-256. A run is reproducible in this sense: its exact inputs can be reconstructed. Model output is not deterministic, so re-execution of a past run uses the recorded transcripts (Task 22).
+**`manifest.json`** records what the run was given: the task file hash, the project base commit, the engine commit, hashes of the flow, rubric, role prompts and rules, the model id and parameters per role, the budgets, and every context file with its SHA-256. Home files are recorded relative to the home repository, context files relative to the run folder. The manifest is written when the run starts and extended with each step's context files as the step's context is written, so it is complete when the run finishes. A run is reproducible in this sense: its exact inputs can be reconstructed. Model output is not deterministic, so re-execution of a past run uses the recorded transcripts (Task 22).
 
-**Inspection.** `cplane inspect <run> --context` shows, per step, the files provided, the files actually read, and tokens by source. This is the feedback loop for context work. A file that is indexed and never read across many runs should leave the index. A file every run reads belongs in the brief.
+**Inspection.** `cplane inspect <run> --context` shows, per step, the files provided, the files actually read, and tokens by source. Provided files come from the manifest; read files are the successful `read_file` calls in `tool_calls.jsonl`. Tokens by source (brief, context, worktree, search, commands, edits, submit, engine notices) are estimated from the transcript at four characters per token, next to the input total measured in `usage.json`. This is the feedback loop for context work. A file that is indexed and never read across many runs should leave the index. A file every run reads belongs in the brief.
 
 ## 10. Guardrails
 

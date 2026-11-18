@@ -96,6 +96,14 @@ def test_write_json_writes_a_file_inside_the_run_folder_atomically(run: RunFolde
     assert [p.name for p in (run.path / "steps/01-plan-1").iterdir()] == ["state.json"]
 
 
+def test_write_bytes_writes_a_file_inside_the_run_folder_byte_for_byte(run: RunFolder) -> None:
+    run.write_bytes("context/01-plan-1/diff.patch", b"\xff\x00patch\n")
+
+    assert (run.path / "context/01-plan-1/diff.patch").read_bytes() == b"\xff\x00patch\n"
+    with pytest.raises(ValueError, match="outside the run folder"):
+        run.write_bytes("../escape.bin", b"")
+
+
 def test_write_json_refuses_a_path_outside_the_run_folder(run: RunFolder) -> None:
     with pytest.raises(ValueError, match="outside the run folder"):
         run.write_json("../escape.json", {})
@@ -186,6 +194,8 @@ def test_writes_after_finish_are_refused(run: RunFolder) -> None:
         run.append_jsonl("events.jsonl", "{}\n")
     with pytest.raises(RunFinishedError, match="R-0001"):
         run.log_event("late")
+    with pytest.raises(RunFinishedError, match="R-0001"):
+        run.write_bytes("context/late.md", b"late\n")
     assert not (run.path / "manifest.json").exists()
 
 
