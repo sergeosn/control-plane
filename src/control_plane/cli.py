@@ -119,6 +119,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = commands.add_parser("status", help="state, current step, iteration and cost")
     status.add_argument("run_id", nargs="?")
+    status.add_argument(
+        "--json", action="store_true", help="print one machine-readable JSON object per run"
+    )
 
     commands.add_parser("reindex", help="rebuild the index and verify finished run folders")
 
@@ -396,6 +399,21 @@ def _resume(args: argparse.Namespace) -> int:
 def _status(args: argparse.Namespace) -> int:
     home = resolve_home(args)
     statuses = app_status.run_statuses(home, args.run_id)
+    if args.json:
+        for status in statuses:
+            print(
+                json.dumps(
+                    {
+                        "id": status.run_id,
+                        "task": status.task_id,
+                        "state": status.state,
+                        "current_step": status.step,
+                        "iteration": status.iteration,
+                        "cost": status.cost_usd,
+                    }
+                )
+            )
+        return 0
     if not statuses:
         print("No runs.")
     for status in statuses:
