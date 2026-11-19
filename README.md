@@ -1,10 +1,36 @@
 # Control Plane
 
+[![CI](https://github.com/sergeosn/control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/sergeosn/control-plane/actions/workflows/ci.yml)
+
 Control Plane is a local, single-user system that takes a task from a backlog to a merged
 branch. For each task it assembles context, plans, carries out the plan in an isolated copy of
 the repository, checks the result with deterministic gates, has a second model review it,
 iterates on the feedback, and stops only where a human decision is required. The first project
 it works on is its own source code.
+
+## How it works
+
+Flow:
+
+- Plan the task.
+- Implement the plan in an isolated git worktree.
+- Check the result with deterministic gates.
+- Have a second model review it.
+- Merge on human approval.
+- Iterate on failure.
+
+Guardrails:
+
+- A tool-calling loop written by hand over an OpenAI-compatible API.
+- Structured output through strict submit tools, validated with Pydantic.
+- Every tool call classified as read, write-local, write-external, destructive or blocked, with
+  park and resume on approval.
+- A path jail, and an environment allowlist for commands.
+- Token, cost and time budgets.
+- Gates the agent cannot edit.
+- Self-update through a control checkout, with rollback.
+
+The details are in [docs/SPEC.md](docs/SPEC.md).
 
 The specification is [docs/SPEC.md](docs/SPEC.md) and the task plan is
 [docs/TASKS.md](docs/TASKS.md).
@@ -93,3 +119,20 @@ review $0.22.
 - **The CLI could not answer a budget approval.** A `budget` entry takes `extend` or `end`, but
   `cplane approve` sent `approve`, which that entry does not accept. Fixed in `0de41c4`:
   `approve` and `deny` now send the positive and negative answer of each approval type.
+
+## Runs so far
+
+From `cplane report`:
+
+| | |
+|---|---|
+| Runs merged | 2 (T-0001, T-0002) |
+| Merged with no human input other than approvals | 1 (T-0002 asked the planner's questions, which count as human input) |
+| Median iterations | 1.5 |
+| Cost | median $2.31, total $4.62 |
+| Median wall time | 36.1 minutes |
+| Tool calls | 292: 209 read, 68 write-local, 12 unclassified (submit tools), 3 unclassified and parked for human approval |
+| Gate failures | none |
+
+Costs are the engine's estimate from conservative placeholder prices in `plane.yaml`, so the
+real spend was lower.
